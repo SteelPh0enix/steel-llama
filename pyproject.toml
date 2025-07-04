@@ -4,4 +4,13 @@ version = "0.1.0"
 description = "My Discord bot utilizing ollama"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "discord>=2.3.2",
+    "ollama>=0.5.1",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.16.1",
+    "ruff>=0.12.1",
+]
