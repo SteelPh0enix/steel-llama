@@ -1,0 +1,6 @@
+name: Python sqlite3 package
+version: 0.0.1
+schema: v1
+docs:
+  - name: Python sqlite3 package
+    startUrl: https://docs.python.org/3/library/sqlite3.html
