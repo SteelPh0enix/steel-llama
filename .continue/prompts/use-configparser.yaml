@@ -1,0 +1,7 @@
+name: Use configparser
+version: 0.0.1
+schema: v1
+prompts:
+  - name: Use configparser
+    description: Use configparser for app configuration
+    prompt: For configuration, use Python's configparser file format.
