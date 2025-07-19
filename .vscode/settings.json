@@ -2,5 +2,6 @@
     "cSpell.words": [
         "configparser",
         "steelllama"
-    ]
+    ],
+    "python.REPL.enableREPLSmartSend": false
 }
