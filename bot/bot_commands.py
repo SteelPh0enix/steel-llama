@@ -10,15 +10,20 @@ class BotCommands(commands.Cog):
 
     @commands.command(name="llm", description="Interact with the LLM using a prompt.")
     async def respond(self, ctx: commands.Context, *, prompt):
-        model = self.bot.config.models.default_model
+        model = (
+            self.bot.config.models.default_model
+        )  # TODO: use model selected by the user (add persistent user config first)
         message = await ctx.message.reply("*Processing...*")
+        model_config = self.bot.config.models.find_config_for_model(model)
 
         try:
             stream = await asyncio.to_thread(
                 ollama.generate, model, prompt, stream=True
             )
 
-            await process_llm_response(stream, message, self.bot.config)
+            await process_llm_response(
+                stream, message, self.bot.config.bot, model_config
+            )
         except Exception as e:
             await message.edit(content=f"Error: {str(e)}")
 
