@@ -1,19 +1,31 @@
 from discord.ext import commands
+import asyncio
+import ollama
+from bot import Bot, process_llm_response
 
 
 class BotCommands(commands.Cog):
-    def __init__(self, bot):
-        self.bot = bot 
+    def __init__(self, bot: Bot):
+        self.bot = bot
 
     @commands.command(name="llm", description="Interact with the LLM using a prompt.")
-    async def respond(self, ctx, *, prompt):
-        default_model = self.bot.config.models.default_model
-        await ctx.send(f"called llm with prompt {prompt} using model: {default_model}")
+    async def respond(self, ctx: commands.Context, *, prompt):
+        model = self.bot.config.models.default_model
+        message = await ctx.message.reply("*Processing...*")
+
+        try:
+            stream = await asyncio.to_thread(
+                ollama.generate, model, prompt, stream=True
+            )
+
+            await process_llm_response(stream, message, self.bot.config)
+        except Exception as e:
+            await message.edit(content=f"Error: {str(e)}")
 
     @commands.command(
         name="llm-new-session", description="Create a new private session."
     )
-    async def llm_new_session(self, ctx, session_name: str | None):
+    async def llm_new_session(self, ctx: commands.Context, session_name: str | None):
         if session_name is None:
             await ctx.send("Missing session name!")
             return
@@ -30,7 +42,7 @@ class BotCommands(commands.Cog):
     @commands.command(
         name="llm-change-session", description="Switch to a different session."
     )
-    async def llm_change_session(self, ctx, session_name: str | None):
+    async def llm_change_session(self, ctx: commands.Context, session_name: str | None):
         if session_name is None:
             await ctx.send("Missing session name!")
             return
@@ -39,7 +51,7 @@ class BotCommands(commands.Cog):
         await ctx.send(f"*Switched to session {session_name}*")
 
     @commands.command(name="llm-remove-session", description="Remove a saved session.")
-    async def llm_remove_session(self, ctx, session_name: str | None):
+    async def llm_remove_session(self, ctx: commands.Context, session_name: str | None):
         if session_name is None:
             await ctx.send("Missing session name!")
             return
@@ -50,7 +62,9 @@ class BotCommands(commands.Cog):
     @commands.command(
         name="llm-get-session-size", description="Get the size of a saved session."
     )
-    async def llm_get_session_size(self, ctx, session_name: str | None):
+    async def llm_get_session_size(
+        self, ctx: commands.Context, session_name: str | None
+    ):
         if session_name is None:
             await ctx.send("Missing session name!")
             return
@@ -62,7 +76,9 @@ class BotCommands(commands.Cog):
         name="llm-set-system-prompt",
         description="Set a system prompt for the current session.",
     )
-    async def llm_set_system_prompt(self, ctx, prompt_content: str | None):
+    async def llm_set_system_prompt(
+        self, ctx: commands.Context, prompt_content: str | None
+    ):
         if prompt_content is None:
             await ctx.send("Missing prompt content!")
             return
@@ -79,7 +95,7 @@ class BotCommands(commands.Cog):
         name="llm-set-session-model", description="Set a model for the current session."
     )
     async def llm_set_session_model(
-        self, ctx, session_name: str | None, model_name: str | None
+        self, ctx: commands.Context, session_name: str | None, model_name: str | None
     ):
         if session_name is None or model_name is None:
             await ctx.send("Missing session name or model name!")

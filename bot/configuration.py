@@ -18,6 +18,7 @@ class AdminConfig:
 class BotConfig:
     discord_api_key: str
     bot_prefix: str
+    edit_delay: float
 
 
 @dataclass
@@ -52,7 +53,10 @@ def load_config(config_path: str) -> Config:
 
     bot_api_key = config_parser.get("bot", "discord_api_key")
     bot_prefix = config_parser.get("bot", "bot_prefix")
-    bot_config = BotConfig(discord_api_key=bot_api_key, bot_prefix=bot_prefix)
+    bot_delay = float(config_parser.get("bot", "edit_delay_seconds"))
+    bot_config = BotConfig(
+        discord_api_key=bot_api_key, bot_prefix=bot_prefix, edit_delay=bot_delay
+    )
 
     return Config(models=models_config, admin=admin_config, bot=bot_config)
 
@@ -69,6 +73,7 @@ def create_example_config(file_path: str):
     config["bot"] = {
         "discord_api_key": "your_discord_api_key_here",
         "bot_prefix": "$",
+        "edit_delay_seconds": "0.5",
     }
 
     with open(file_path, "w") as f:
