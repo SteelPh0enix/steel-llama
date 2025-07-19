@@ -6,6 +6,7 @@ import configparser
 @dataclass
 class ModelsConfig:
     excluded_models: List[str]
+    default_model: str
 
 
 @dataclass
@@ -30,23 +31,25 @@ def load_config(config_path: str) -> Config:
     """Load configuration from an INI file into strongly typed dataclasses."""
     config_parser = configparser.ConfigParser()
 
-    # Attempt to read the config file
     files_read = config_parser.read(config_path)
 
     if not files_read:
         raise RuntimeError(f"Config file not found or could not be read: {config_path}")
 
-    # Parse [models] section
     excluded_models_str = config_parser.get("models", "excluded_models")
     excluded_models = [model.strip() for model in excluded_models_str.split(",")]
+    default_model = config_parser.get("models", "default_model")
 
-    models_config = ModelsConfig(excluded_models=excluded_models)
+    if default_model in excluded_models:
+        raise ValueError("Default model cannot be one of the excluded models.")
 
-    # Parse [admin] section
+    models_config = ModelsConfig(
+        excluded_models=excluded_models, default_model=default_model
+    )
+
     admin_id = int(config_parser.get("admin", "id"))
     admin_config = AdminConfig(id=admin_id)
 
-    # Parse [bot] section
     bot_api_key = config_parser.get("bot", "discord_api_key")
     bot_prefix = config_parser.get("bot", "bot_prefix")
     bot_config = BotConfig(discord_api_key=bot_api_key, bot_prefix=bot_prefix)
@@ -58,8 +61,10 @@ def create_example_config(file_path: str):
     """Create an example configuration file for the bot."""
     config = configparser.ConfigParser()
 
-    # Set default config values
-    config["models"] = {"excluded_models": "model1, model2"}
+    config["models"] = {
+        "excluded_models": "model1, model2",
+        "default_model": "default_model_name",
+    }
     config["admin"] = {"id": "12345"}
     config["bot"] = {
         "discord_api_key": "your_discord_api_key_here",
