@@ -1,7 +1,0 @@
-name: Use sqlite
-version: 0.0.1
-schema: v1
-prompts:
-  - name: Use sqlite
-    description: Use sqlite for persistent data
-    prompt: For saving persistent data, use sqlite database stored locally on hard drive.

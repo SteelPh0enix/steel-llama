@@ -1,0 +1,7 @@
+name: Master prompt
+version: 0.0.1
+schema: v1
+prompts:
+  - name: Keep the code simple and use provided tools.
+    description: Keep the code simple and use provided tools.
+    prompt: Keep the code simple. If you think a comment is necessary, try to simplify the code in order to be easily understandable without additional comments. Do not add any unnecessary comments. Use sqlite for persistent data storage, configparser for configuration. Use latest Python 3.13 features wherever possible. Remember that the bot's source code is in `bot` subdirectory, not `src`.

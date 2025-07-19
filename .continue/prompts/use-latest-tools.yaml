@@ -1,7 +1,0 @@
-name: Use latest tools
-version: 0.0.1
-schema: v1
-prompts:
-  - name: Use latest Python standard
-    description: Use available tools from latest Python standard
-    prompt: When generating Python code, try to use as much features from latest versions of Python as possible.
