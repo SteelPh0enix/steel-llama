@@ -1,15 +1,18 @@
 import sys
-import discord
-from bot.configuration import load_config, create_example_config
-from bot import Bot
 
-DEFAULT_CONFIG_PATH = "bot-config.ini"
+import discord
+
+from pathlib import Path
+from bot import Bot
+from bot.configuration import Config
+
+DEFAULT_CONFIG_PATH = Path("./bot-config.ini")
 
 try:
-    config = load_config(DEFAULT_CONFIG_PATH)
+    config = Config.from_file(DEFAULT_CONFIG_PATH)
 except RuntimeError as e:
     print(f"Error: {e}. Creating example config file...")
-    create_example_config(DEFAULT_CONFIG_PATH)
+    Config.write_default_config(DEFAULT_CONFIG_PATH)
     print(
         f"Example config created. Please edit '{DEFAULT_CONFIG_PATH}' with your settings."
     )
