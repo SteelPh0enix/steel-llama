@@ -13,9 +13,7 @@ class ModelConfig:
     thinking_suffix: str | None
 
     @staticmethod
-    def from_config_section(
-        parser: configparser.ConfigParser, section: str
-    ) -> ModelConfig:
+    def from_config_section(parser: configparser.ConfigParser, section: str) -> ModelConfig:
         thinking_prefix = parser.get(section, "thinking_prefix", fallback=None)
         thinking_suffix = parser.get(section, "thinking_suffix", fallback=None)
 
@@ -25,9 +23,7 @@ class ModelConfig:
         if thinking_suffix is not None and thinking_prefix is None:
             raise ValueError(f"Missing thinking prefix in section {section}")
 
-        return ModelConfig(
-            thinking_prefix=thinking_prefix, thinking_suffix=thinking_suffix
-        )
+        return ModelConfig(thinking_prefix=thinking_prefix, thinking_suffix=thinking_suffix)
 
 
 @dataclass
@@ -56,9 +52,7 @@ class ModelsConfig:
         for section in parser.sections():
             if section.startswith("models."):
                 model_wildcard_name = section[7:]
-                models_config[model_wildcard_name] = ModelConfig.from_config_section(
-                    parser, section
-                )
+                models_config[model_wildcard_name] = ModelConfig.from_config_section(parser, section)
 
         return ModelsConfig(
             excluded_models=excluded_models,
@@ -107,9 +101,7 @@ class Config:
         files_read = config_parser.read(config_path)
 
         if not files_read:
-            raise ValueError(
-                f"Config file not found or could not be read: {config_path}"
-            )
+            raise ValueError(f"Config file not found or could not be read: {config_path}")
 
         models_config = ModelsConfig.from_config(config_parser)
         admin_config = AdminConfig.from_config(config_parser)

@@ -12,13 +12,8 @@ class Bot(commands.Bot):
         self.config = config
 
 
-def process_thinking_output(
-    response: str, model_config: ModelConfig, replacement: str = "*"
-) -> str:
-    if (
-        model_config.thinking_prefix is not None
-        and model_config.thinking_suffix is not None
-    ):
+def process_thinking_output(response: str, model_config: ModelConfig, replacement: str = "*") -> str:
+    if model_config.thinking_prefix is not None and model_config.thinking_suffix is not None:
         thinking_prefix_position = response.find(model_config.thinking_prefix)
 
         # thinking tags may be followed with whitespace, which must be removed
@@ -28,21 +23,14 @@ def process_thinking_output(
             if response.strip() == model_config.thinking_prefix:
                 return f"{replacement}Thinking...{replacement}"
 
-            response = (
-                replacement
-                + response[
-                    thinking_prefix_position + len(model_config.thinking_prefix) :
-                ].lstrip()
-            )
+            response = replacement + response[thinking_prefix_position + len(model_config.thinking_prefix) :].lstrip()
 
             thinking_suffix_position = response.find(model_config.thinking_suffix)
             if thinking_suffix_position != -1:
                 response = (
                     response[:thinking_suffix_position].rstrip()
                     + replacement
-                    + response[
-                        thinking_suffix_position + len(model_config.thinking_suffix) :
-                    ]
+                    + response[thinking_suffix_position + len(model_config.thinking_suffix) :]
                 )
             else:
                 response = response.rstrip() + replacement

@@ -13,9 +13,7 @@ try:
 except RuntimeError as e:
     print(f"Error: {e}. Creating example config file...")
     Config.write_default_config(DEFAULT_CONFIG_PATH)
-    print(
-        f"Example config created. Please edit '{DEFAULT_CONFIG_PATH}' with your settings."
-    )
+    print(f"Example config created. Please edit '{DEFAULT_CONFIG_PATH}' with your settings.")
     sys.exit(1)
 
 intents = discord.Intents.default()

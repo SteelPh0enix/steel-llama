@@ -27,9 +27,7 @@ class Model:
 
     @staticmethod
     def from_ollama_model(ollama_model: ollama.ListResponse.Model) -> Model:
-        name = (
-            ollama_model.model if ollama_model.model is not None else UnknownFieldValue
-        )
+        name = ollama_model.model if ollama_model.model is not None else UnknownFieldValue
         tag = UnknownFieldValue
         ctx_length = UnknownContextLengthValue
 
@@ -42,24 +40,12 @@ class Model:
         if len(name_split) == 2:
             name, tag = name_split[0], name_split[1]
 
-        size = (
-            ollama_model.size.human_readable()
-            if ollama_model.size is not None
-            else UnknownFieldValue
-        )
+        size = ollama_model.size.human_readable() if ollama_model.size is not None else UnknownFieldValue
 
         if (details := ollama_model.details) is not None:
-            parameters = (
-                details.parameter_size
-                if details.parameter_size is not None
-                else UnknownFieldValue
-            )
+            parameters = details.parameter_size if details.parameter_size is not None else UnknownFieldValue
 
-            quant = (
-                details.quantization_level
-                if details.quantization_level is not None
-                else UnknownFieldValue
-            )
+            quant = details.quantization_level if details.quantization_level is not None else UnknownFieldValue
 
             return Model(
                 name=name,
