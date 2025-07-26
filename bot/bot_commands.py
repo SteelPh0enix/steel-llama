@@ -5,9 +5,14 @@ from discord.ext import commands
 from httpx import ConnectError
 
 from bot import Bot, process_llm_response
+from bot.model import Model, UnknownContextLengthValue
+
+LlmBackendUnavailableMessage: str = (
+    "**The LLM backend is currently unavailable, try again later.**"
+)
 
 
-class BotCommands(commands.Cog):
+class SteelLlamaCommands(commands.Cog):
     def __init__(self, bot: Bot):
         self.bot = bot
 
@@ -35,9 +40,7 @@ class BotCommands(commands.Cog):
                 stream, message, self.bot.config.bot, model_config
             )
         except ConnectError:
-            await message.edit(
-                content="**The LLM backend is currently unavailable, try again later.**"
-            )
+            await message.edit(content=LlmBackendUnavailableMessage)
         except Exception as e:
             await message.edit(
                 content=f"**Oops, an unknown error has happened: *{str(e)}***"
@@ -137,8 +140,28 @@ class BotCommands(commands.Cog):
     @commands.command(name="llm-list-models")
     async def llm_list_models(self, ctx: commands.Context):
         """List all available models."""
-        # Placeholder logic
-        await ctx.send("Listing models...")
+        try:
+            models = [Model.from_ollama_model(model) for model in ollama.list().models]
+        except ConnectError:
+            await ctx.message.reply(content=LlmBackendUnavailableMessage)
+            return
+        except Exception as e:
+            await ctx.message.reply(
+                content=f"**Oops, an unknown error has happened: *{str(e)}***"
+            )
+            return
+
+        excluded_models = self.bot.config.models.excluded_models
+        allowed_models = [
+            model for model in models if model.name not in excluded_models
+        ]
+
+        formatted_message = "# Available models:\n" + "\n".join(
+            f"- **{model}** - {model.parameters_size} parameters, {model.quant} quantization, {model.context_length if model.context_length != UnknownContextLengthValue else 'Unknown'} context length"
+            for model in allowed_models
+        )
+
+        await ctx.message.reply(formatted_message)
 
     @commands.command(name="llm-set-session-model")
     async def llm_set_session_model(
@@ -162,4 +185,4 @@ class BotCommands(commands.Cog):
 
 
 async def setup(bot):
-    await bot.add_cog(BotCommands(bot))
+    await bot.add_cog(SteelLlamaCommands(bot))
