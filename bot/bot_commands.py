@@ -2,6 +2,7 @@ import asyncio
 
 import ollama
 from discord.ext import commands
+from httpx import ConnectError
 
 from bot import Bot, process_llm_response
 
@@ -33,8 +34,14 @@ class BotCommands(commands.Cog):
             await process_llm_response(
                 stream, message, self.bot.config.bot, model_config
             )
+        except ConnectError:
+            await message.edit(
+                content="**The LLM backend is currently unavailable, try again later.**"
+            )
         except Exception as e:
-            await message.edit(content=f"Error: {str(e)}")
+            await message.edit(
+                content=f"**Oops, an unknown error has happened: *{str(e)}***"
+            )
 
     @commands.command(name="llm-new-session")
     async def llm_new_session(self, ctx: commands.Context, session_name: str | None):
