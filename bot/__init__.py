@@ -4,6 +4,7 @@ from discord import Message
 from discord.ext import commands
 
 from bot.configuration import BotConfig, Config, ModelConfig
+from bot.response import LLMResponse
 
 
 class Bot(commands.Bot):
@@ -12,36 +13,30 @@ class Bot(commands.Bot):
         self.config = config
 
 
-def process_thinking_output(response: str, model_config: ModelConfig, replacement: str = "*") -> str:
-    if model_config.thinking_prefix is not None and model_config.thinking_suffix is not None:
-        thinking_prefix_position = response.find(model_config.thinking_prefix)
+def process_raw_response(raw_response: str, model_config: ModelConfig | None) -> str:
+    thinking_tags: tuple[str, str] | None = None
+    if (
+        (model_config is not None)
+        and (model_config.thinking_prefix is not None)
+        and (model_config.thinking_suffix is not None)
+    ):
+        thinking_tags = (model_config.thinking_prefix, model_config.thinking_suffix)
 
-        # thinking tags may be followed with whitespace, which must be removed
-        # otherwise, Discord won't render the text properly if replacement is used for formatting (like '*')
-        if thinking_prefix_position != -1:
-            # special case - if thinking prefix is the only part of the message.
-            if response.strip() == model_config.thinking_prefix:
-                return f"{replacement}Thinking...{replacement}"
+    response = LLMResponse(raw_response, thinking_tags)
 
-            response = replacement + response[thinking_prefix_position + len(model_config.thinking_prefix) :].lstrip()
+    # there's actual message in there
+    if (response.content is not None) and (len(response.content) > 0):
+        # and even with some thoughts
+        if (response.thoughts is not None) and (len(response.thoughts) > 0):
+            return f"*{response.thoughts}*\n\n{response.content}"
+        # or not
+        return response.content
 
-            thinking_suffix_position = response.find(model_config.thinking_suffix)
-            if thinking_suffix_position != -1:
-                response = (
-                    response[:thinking_suffix_position].rstrip()
-                    + replacement
-                    + response[thinking_suffix_position + len(model_config.thinking_suffix) :]
-                )
-            else:
-                response = response.rstrip() + replacement
+    # thinking in progress
+    if (response.thoughts is not None) and (len(response.thoughts) > 0):
+        return f"*{response.thoughts}*"
 
-    return response
-
-
-def process_raw_response(response: str, model_config: ModelConfig | None) -> str:
-    if model_config is not None:
-        return process_thinking_output(response, model_config)
-    return response
+    return "Waiting for response..."
 
 
 async def process_llm_response(

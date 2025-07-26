@@ -17,6 +17,7 @@ class ModelConfig:
         thinking_prefix = parser.get(section, "thinking_prefix", fallback=None)
         thinking_suffix = parser.get(section, "thinking_suffix", fallback=None)
 
+        # user muse specify both or neither
         if thinking_prefix is not None and thinking_suffix is None:
             raise ValueError(f"Missing thinking suffix in section {section}")
 
