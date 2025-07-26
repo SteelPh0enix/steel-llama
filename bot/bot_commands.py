@@ -15,7 +15,7 @@ class SteelLlamaCommands(commands.Cog):
         self.bot = bot
 
     @commands.command(name="llm")
-    async def respond(self, ctx: commands.Context, *, prompt: str):
+    async def respond(self, ctx: commands.Context, *, prompt: str | None):
         """Chat with the LLM
 
         Parameters
@@ -23,6 +23,10 @@ class SteelLlamaCommands(commands.Cog):
         prompt : str
             Message to send.
         """
+        if prompt is None:
+            await ctx.message.reply("*Error: no message, what do you want me to respond to?*")
+            return
+
         model = (
             self.bot.config.models.default_model
         )  # TODO: use model selected by the user (add persistent user config first)
