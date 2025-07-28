@@ -164,6 +164,10 @@ class BotConfig:
     edit_delay: float
     """Delay in seconds between editing messages when responding to prompts."""
 
+    max_messages_for_context: int
+    """Maximum amount of messages fetched from the history for LLM context.
+    The actual amount of used messages may be smaller if context is not large enough."""
+
     @staticmethod
     def from_config(parser: configparser.ConfigParser) -> BotConfig:
         """
@@ -181,11 +185,25 @@ class BotConfig:
         """
         bot_api_key = parser.get("bot", "discord_api_key")
         bot_prefix = parser.get("bot", "bot_prefix")
+
+        if bot_prefix == "":
+            raise ValueError("Invalid bot prefix, must not be empty!")
+
         bot_delay = parser.getfloat("bot", "edit_delay_seconds")
+
+        if bot_delay <= 0:
+            raise ValueError("Invalid bot edit delay, must be longer than 0 seconds")
+
+        max_messages_for_context = parser.getint("bot", "max_messages_for_context")
+
+        if max_messages_for_context < 0:
+            raise ValueError("Invalid context message limit, must be 0 or more")
+
         return BotConfig(
             discord_api_key=bot_api_key,
             bot_prefix=bot_prefix,
             edit_delay=bot_delay,
+            max_messages_for_context=max_messages_for_context,
         )
 
 
@@ -261,6 +279,7 @@ class Config:
             "discord_api_key": "your_discord_api_key_here",
             "bot_prefix": "$",
             "edit_delay_seconds": "0.5",
+            "max_messages_for_context": "30",
         }
 
         config["models.qwen3-*"] = {
