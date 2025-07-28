@@ -2,12 +2,21 @@ import asyncio
 
 import ollama
 from discord.ext import commands
+from discord import User, Member
 from httpx import ConnectError
 
 from bot import Bot, process_llm_response
 from bot.model import Model, UnknownContextLengthValue
 
 LlmBackendUnavailableMessage: str = "**The LLM backend is currently unavailable, try again later.**"
+
+
+def translate_mentions_into_usernames(message: str, mentions: list[User | Member]) -> str:
+    for mention in mentions:
+        message = message.replace(
+            f"<@{mention.id}>", f"<@{mention.name if mention.name is not None else 'Unknown user'}>"
+        )
+    return message
 
 
 class SteelLlamaCommands(commands.Cog):
@@ -26,6 +35,9 @@ class SteelLlamaCommands(commands.Cog):
         if prompt is None:
             await ctx.message.reply("*Error: no message, what do you want me to respond to?*")
             return
+
+        prompt = translate_mentions_into_usernames(prompt, ctx.message.mentions)
+        print(f"Responding to {prompt}")
 
         model = (
             self.bot.config.models.default_model
