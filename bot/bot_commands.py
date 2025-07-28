@@ -36,13 +36,11 @@ class SteelLlamaCommands(commands.Cog):
             await ctx.message.reply("*Error: no message, what do you want me to respond to?*")
             return
 
-        prompt = translate_mentions_into_usernames(prompt, ctx.message.mentions)
-        print(f"Responding to {prompt}")
-
-        model = (
-            self.bot.config.models.default_model
-        )  # TODO: use model selected by the user (add persistent user config first)
         message = await ctx.message.reply("*Processing...*")
+
+        prompt = translate_mentions_into_usernames(prompt, ctx.message.mentions)
+
+        model = self.bot.config.models.default_model
         model_config = self.bot.config.models.find_config_for_model(model)
 
         try:
