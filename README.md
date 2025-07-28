@@ -39,22 +39,27 @@ The capital of Poland is Warsaw.
 ### Show bot's help
 
 ```text
-$llm-help
+$help
 ```
 
 Bot's response:
 
 ```text
-This is SteelLlama, simple bridge between Ollama and Discord with user/session management.
-Available commands:
-- $llm-new-session [session name]
-- $llm-list-sessions
-- $llm-change-session [session name]
-- $llm-remove-session [session name]
-- $llm-get-session-size [session name]
-- $llm-set-system-prompt [prompt content]
-- $llm-list-models
-- $llm-set-session-model [session-name] [model name]
+SteelLlamaCommands:
+  llm                   Chat with the LLM
+  llm-change-session    Switch to a different session.
+  llm-get-session-size  Get the size of a saved session.
+  llm-list-models       List all available models.
+  llm-list-sessions     List all saved sessions.
+  llm-new-session       Create a new private session.
+  llm-remove-session    Remove a saved session.
+  llm-set-session-model Set a model for the current session.
+  llm-set-system-prompt Set a system prompt for the current session.
+​No Category:
+  help                  Shows this message
+
+Type $help command for more info on a command.
+You can also type $help category for more info on a category.
 ```
 
 ### Create new session
@@ -179,9 +184,26 @@ If an unauthorized user tries to do that, bot responds with `Error: you are not 
 ```ini
 [models]
 # Names of models excluded from the use, comma-separated
-excluded_models = ExcludedModelA,ExcludedModelB
+excluded_models = model1, model2
+# The model to use by default
+default_model = default_model_name
 
 [admin]
 # Discord ID of administrator's account.
-id = 12345678
+id = 12345
+
+[bot]
+# Discord API key for the bot
+discord_api_key = your_discord_api_key_here
+# Prefix for bot commands
+bot_prefix = $
+# Delay in seconds between message edits
+edit_delay_seconds = 0.5
+# Maximum number of messages to use for context
+max_messages_for_context = 30
+
+[models.qwen3-*]
+# Optional prefix and suffix for thinking indicator (used for models like qwen3)
+thinking_prefix = "<think>"
+thinking_suffix = "</think>"
 ```
