@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import sqlite3
-from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
 
 from bot.chat_message import ChatMessage
 
@@ -11,202 +10,234 @@ DefaultModelName = "<DEFAULT_MODEL>"
 DefaultBotDatabasePath = Path("./bot.db")
 
 
-@dataclass
-class SessionInfo:
-    """Represents session information."""
-
-    model: str
-    system_prompt: str
-
-
 class ChatSession:
+    def __init__(self, owner_id: int, name: str, model: str = DefaultModelName, system_prompt: str = "") -> None:
+        self._owner_id = owner_id
+        self._name = name
+        self._model = model
+        self._system_prompt = system_prompt
+        self._messages: list[ChatMessage] = []
+
+    @property
+    def owner_id(self) -> int:
+        return self._owner_id
+
+    @owner_id.setter
+    def owner_id(self, new_owner_id: int) -> None:
+        self._owner_id = new_owner_id
+        self._save_session_info()
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @name.setter
+    def name(self, new_name: str) -> None:
+        self._name = new_name
+        self._save_session_info()
+
+    @property
+    def model(self) -> str:
+        return self._model
+
+    @model.setter
+    def model(self, new_model: str) -> None:
+        self._model = new_model
+        self._save_session_info()
+
+    @property
+    def system_prompt(self) -> str:
+        return self._system_prompt
+
+    @system_prompt.setter
+    def system_prompt(self, new_system_prompt: str) -> None:
+        self._system_prompt = new_system_prompt
+        self._save_session_info()
+
+    def add_message(self, message: ChatMessage) -> None:
+        self._messages.append(message)
+        self._messages.sort(key=lambda msg: msg.timestamp)
+        self._save_session_messages()
+
+    def messages(self, limit: int | None = None) -> list[ChatMessage]:
+        return self._messages[:limit] if limit is not None else self._messages
+
+    def save(self) -> None:
+        self._save_session_info()
+        self._save_session_messages()
+
+    def _save_session_info(self) -> None:
+        # Implement if needed
+        pass
+
+    def _save_session_messages(self) -> None:
+        # Implement if needed
+        pass
+
+
+class SqliteChatSession(ChatSession):
     """Represents a persistent chat session stored in SQLite database."""
 
-    def __init__(self, name: str, owner_id: int, db_path: Path = DefaultBotDatabasePath):
-        self.name = name
-        self.owner_id = owner_id
-        self.db_path = db_path
+    def __init__(
+        self,
+        owner_id: int,
+        name: str,
+        db_path: Path = DefaultBotDatabasePath,
+    ):
+        super().__init__(owner_id, name, DefaultModelName, "")
+        self._db_path = db_path
         self._init_database()
+        self.load()
 
     def _init_database(self):
         """Create necessary tables if they don't exist."""
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self._db_path) as conn:
             cursor = conn.cursor()
             # Create sessions table
             cursor.execute(f"""
                 CREATE TABLE IF NOT EXISTS sessions (
-                    name TEXT,
                     owner_id INTEGER,
+                    name TEXT,
                     model TEXT DEFAULT '{DefaultModelName}',
                     system_prompt TEXT DEFAULT '',
-                    PRIMARY KEY (name, owner_id)
+                    PRIMARY KEY (owner_id, name)
                 )
-            """)
+                """)
 
             # Create messages table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS messages (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    date TEXT,
+                    id INTEGER PRIMARY KEY,
+                    owner_id INTEGER,
                     sender_id INTEGER,
                     sender_nickname TEXT,
-                    content TEXT,
                     session_name TEXT,
-                    owner_id INTEGER,
-                    FOREIGN KEY (session_name, owner_id) REFERENCES sessions (name, owner_id)
+                    timestamp TEXT,
+                    content TEXT,
+                    FOREIGN KEY (owner_id, session_name) REFERENCES sessions (owner_id, name)
                 )
-            """)
-
-            # Create indexes for better performance
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_messages_session 
-                ON messages(session_name, owner_id, date)
-            """)
+                """)
 
             conn.commit()
 
-    def save_session(self, model: str = DefaultModelName, system_prompt: str = ""):
+    def _save_session_info(self) -> None:
         """Save or update the session in the database."""
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self._db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                INSERT OR REPLACE INTO sessions (name, owner_id, model, system_prompt)
+                INSERT OR REPLACE INTO sessions (owner_id, name, model, system_prompt)
                 VALUES (?, ?, ?, ?)
-            """,
-                (self.name, self.owner_id, model, system_prompt),
+                """,
+                (self.owner_id, self.name, self.model, self.system_prompt),
             )
             conn.commit()
 
-    def get_session_info(self) -> Optional[SessionInfo]:
-        """Get model and system prompt for this session.
-
-        Returns:
-            SessionInfo object or None if session doesn't exist
-        """
-        with sqlite3.connect(self.db_path) as conn:
+    def _save_session_messages(self) -> None:
+        """Save the list of messages to the database. Removes the messages not on the list."""
+        with sqlite3.connect(self._db_path) as conn:
             cursor = conn.cursor()
+
             cursor.execute(
                 """
-                SELECT model, system_prompt FROM sessions 
-                WHERE name = ? AND owner_id = ?
-            """,
-                (self.name, self.owner_id),
+                SELECT id 
+                from MESSAGES
+                WHERE owner_id = ? AND session_name = ?
+                """,
+                (self.owner_id, self.name),
             )
-            result = cursor.fetchone()
-            return SessionInfo(model=result[0], system_prompt=result[1]) if result else None
+            saved_messages_ids = cursor.fetchall()
+            current_messages_ids = [msg.id for msg in self._messages]
 
-    def add_message(self, message: ChatMessage):
-        """Add a message to this session."""
+            # remove messages that aren't on the list from the database
+            for id in saved_messages_ids:
+                if id not in current_messages_ids:
+                    cursor.execute("DELETE FROM messages WHERE id = ?", (id,))
 
-        with sqlite3.connect(self.db_path) as conn:
-            if not self._session_exists_conn(self.name, self.owner_id, conn):
-                raise ValueError(
-                    f"Session '{self.name}' does not exist for user {self.owner_id}. Please save the session first."
-                )
+            # add missing messages from the list to the database
+            for msg in self._messages:
+                if msg.id not in saved_messages_ids:
+                    cursor.execute(
+                        """
+                        INSERT INTO messages
+                        (id, owner_id, sender_id, sender_nickname, session_name, timestamp, content)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)                   
+                        """,
+                        (
+                            msg.id,
+                            msg.owner_id,
+                            msg.sender_id,
+                            msg.sender_nickname,
+                            msg.session_name,
+                            msg.timestamp.isoformat(),
+                            msg.content,
+                        ),
+                    )
 
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                INSERT INTO messages 
-                (date, sender_id, sender_nickname, content, session_name, owner_id)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """,
-                message.to_db_tuple(),
-            )
             conn.commit()
 
-    def get_messages(self, limit: Optional[int] = None) -> List[ChatMessage]:
-        """Retrieve messages for this session, optionally limited.
-
-        Args:
-            limit: Maximum number of messages to retrieve, ordered by date descending
-
-        Returns:
-            List of ChatMessage objects, ordered by date ascending
-        """
-        with sqlite3.connect(self.db_path) as conn:
+    def load(self) -> None:
+        """Loads the session details from database, if they are stored there.
+        Overwrites current model/prompt/messages if they exist in the database."""
+        with sqlite3.connect(self._db_path) as conn:
             cursor = conn.cursor()
-            if limit:
-                cursor.execute(
-                    """
-                    SELECT date, sender_id, sender_nickname, content, session_name, owner_id
-                    FROM messages 
-                    WHERE session_name = ? AND owner_id = ?
-                    ORDER BY date DESC 
-                    LIMIT ?
-                """,
-                    (self.name, self.owner_id, limit),
-                )
-            else:
-                cursor.execute(
-                    """
-                    SELECT date, sender_id, sender_nickname, content, session_name, owner_id
-                    FROM messages 
-                    WHERE session_name = ? AND owner_id = ?
-                    ORDER BY date ASC
-                """,
-                    (self.name, self.owner_id),
-                )
 
-            rows = cursor.fetchall()
-            # If we used limit, we need to reverse the order to get chronological order
-            if limit:
-                rows = reversed(rows)  # type: ignore
-
-            return [ChatMessage.from_db_tuple(row) for row in rows]
-
-    def delete_session(self):
-        """Delete this session and all its messages."""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            # Delete messages first due to foreign key constraint
             cursor.execute(
                 """
-                DELETE FROM messages 
-                WHERE session_name = ? AND owner_id = ?
-            """,
-                (self.name, self.owner_id),
+                SELECT model, system_prompt
+                FROM sessions
+                WHERE owner_id = ? AND name = ?
+                """,
+                (self.owner_id, self.name),
             )
 
-            # Delete the session
+            if (session_details := cursor.fetchone()) is not None:
+                model, system_prompt = session_details
+                self._model = model
+                self._system_prompt = system_prompt
+
             cursor.execute(
                 """
-                DELETE FROM sessions 
-                WHERE name = ? AND owner_id = ?
-            """,
-                (self.name, self.owner_id),
+                SELECT id, owner_id, sender_id, sender_nickname, session_name, timestamp, content
+                FROM messages
+                WHERE owner_id = ? AND session_name = ?
+                ORDER BY timestamp ASC
+                """,
+                (self.owner_id, self.name),
             )
+
+            messages = cursor.fetchall()
+            if len(messages) > 0:
+                self._messages = [
+                    ChatMessage(
+                        id=id,
+                        owner_id=owner_id,
+                        sender_id=sender_id,
+                        sender_nickname=sender_nickname,
+                        session_name=session_name,
+                        timestamp=datetime.fromisoformat(timestamp),
+                        content=content,
+                    )
+                    for (id, owner_id, sender_id, sender_nickname, session_name, timestamp, content) in messages
+                ]
+
+    def delete(self) -> None:
+        """Deletes the session and all it's messages from database"""
+        with sqlite3.connect(self._db_path) as conn:
+            cursor = conn.cursor()
+
+            cursor.execute("DELETE FROM messages WHERE owner_id = ? AND session_name = ?", (self.owner_id, self.name))
+            cursor.execute("DELETE FROM sessions WHERE owner_id = ? AND name = ?", (self.owner_id, self.name))
 
             conn.commit()
 
     @staticmethod
-    def list_sessions(owner_id: int, db_path: Path = DefaultBotDatabasePath) -> List[str]:
-        """List all session names for a user."""
+    def list_user_sessions(user_id: int, db_path: Path = DefaultBotDatabasePath) -> list[str]:
+        """Returns a list of session names for specified user."""
         with sqlite3.connect(db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute(
-                """
-                SELECT name FROM sessions WHERE owner_id = ?
-            """,
-                (owner_id,),
-            )
-            rows = cursor.fetchall()
-            return [row[0] for row in rows]
+            cursor.execute("SELECT name FROM sessions WHERE owner_id = ?", (user_id,))
+            sessions = cursor.fetchall()
+            return [session[0] for session in sessions]
 
-    @staticmethod
-    def session_exists(name: str, owner_id: int, db_path: Path = DefaultBotDatabasePath) -> bool:
-        """Check if a session exists for a user."""
-        with sqlite3.connect(db_path) as conn:
-            return ChatSession._session_exists_conn(name, owner_id, conn)
-
-    @staticmethod
-    def _session_exists_conn(name: str, owner_id: int, conn: sqlite3.Connection) -> bool:
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT 1 FROM sessions WHERE name = ? AND owner_id = ?
-        """,
-            (name, owner_id),
-        )
-        return cursor.fetchone() is not None
+        return []
