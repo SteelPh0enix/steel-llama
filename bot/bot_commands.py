@@ -13,9 +13,7 @@ LlmBackendUnavailableMessage: str = "**The LLM backend is currently unavailable,
 
 def translate_mentions_into_usernames(message: str, mentions: list[User | Member]) -> str:
     for mention in mentions:
-        message = message.replace(
-            f"<@{mention.id}>", f"<@{mention.name if mention.name is not None else 'Unknown user'}>"
-        )
+        message = message.replace(f"<@{mention.id}>", f"<@{mention.name} (UID: {mention.id})>")
     return message
 
 

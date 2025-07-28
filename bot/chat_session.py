@@ -1,70 +1,14 @@
 from __future__ import annotations
 
-import datetime
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
-import discord
+from bot.chat_message import ChatMessage
 
 DefaultModelName = "<DEFAULT_MODEL>"
 DefaultBotDatabasePath = Path("./bot.db")
-
-
-@dataclass
-class ChatMessage:
-    """Represents a single chat message."""
-
-    date: datetime.datetime
-    sender_id: int
-    sender_nickname: str
-    content: str
-    session_name: str
-    user_id: int
-
-    def to_db_tuple(self) -> Tuple:
-        """Convert to tuple for database insertion."""
-        return (
-            self.date.isoformat(),
-            self.sender_id,
-            self.sender_nickname,
-            self.content,
-            self.session_name,
-            self.user_id,
-        )
-
-    @staticmethod
-    def from_db_tuple(data: Tuple) -> ChatMessage:
-        """Create ChatMessage from database tuple."""
-        return ChatMessage(
-            date=datetime.datetime.fromisoformat(data[0]),
-            sender_id=data[1],
-            sender_nickname=data[2],
-            content=data[3],
-            session_name=data[4],
-            user_id=data[5],
-        )
-
-    @staticmethod
-    def from_discord_message(message: discord.Message, session_name: str) -> ChatMessage:
-        """Create ChatMessage from discord.Message.
-
-        Args:
-            message: The discord message to convert
-            session_name: The name of the chat session
-
-        Returns:
-            ChatMessage: A new ChatMessage instance
-        """
-        return ChatMessage(
-            date=message.created_at,
-            sender_id=message.author.id,
-            sender_nickname=message.author.display_name,
-            content=message.content,
-            session_name=session_name,
-            user_id=message.author.id,
-        )
 
 
 @dataclass
@@ -78,9 +22,9 @@ class SessionInfo:
 class ChatSession:
     """Represents a persistent chat session stored in SQLite database."""
 
-    def __init__(self, name: str, user_id: int, db_path: Path = DefaultBotDatabasePath):
+    def __init__(self, name: str, owner_id: int, db_path: Path = DefaultBotDatabasePath):
         self.name = name
-        self.user_id = user_id
+        self.owner_id = owner_id
         self.db_path = db_path
         self._init_database()
 
@@ -92,10 +36,10 @@ class ChatSession:
             cursor.execute(f"""
                 CREATE TABLE IF NOT EXISTS sessions (
                     name TEXT,
-                    user_id INTEGER,
+                    owner_id INTEGER,
                     model TEXT DEFAULT '{DefaultModelName}',
                     system_prompt TEXT DEFAULT '',
-                    PRIMARY KEY (name, user_id)
+                    PRIMARY KEY (name, owner_id)
                 )
             """)
 
@@ -108,15 +52,15 @@ class ChatSession:
                     sender_nickname TEXT,
                     content TEXT,
                     session_name TEXT,
-                    user_id INTEGER,
-                    FOREIGN KEY (session_name, user_id) REFERENCES sessions (name, user_id)
+                    owner_id INTEGER,
+                    FOREIGN KEY (session_name, owner_id) REFERENCES sessions (name, owner_id)
                 )
             """)
 
             # Create indexes for better performance
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_messages_session 
-                ON messages(session_name, user_id, date)
+                ON messages(session_name, owner_id, date)
             """)
 
             conn.commit()
@@ -127,10 +71,10 @@ class ChatSession:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                INSERT OR REPLACE INTO sessions (name, user_id, model, system_prompt)
+                INSERT OR REPLACE INTO sessions (name, owner_id, model, system_prompt)
                 VALUES (?, ?, ?, ?)
             """,
-                (self.name, self.user_id, model, system_prompt),
+                (self.name, self.owner_id, model, system_prompt),
             )
             conn.commit()
 
@@ -145,9 +89,9 @@ class ChatSession:
             cursor.execute(
                 """
                 SELECT model, system_prompt FROM sessions 
-                WHERE name = ? AND user_id = ?
+                WHERE name = ? AND owner_id = ?
             """,
-                (self.name, self.user_id),
+                (self.name, self.owner_id),
             )
             result = cursor.fetchone()
             return SessionInfo(model=result[0], system_prompt=result[1]) if result else None
@@ -156,16 +100,16 @@ class ChatSession:
         """Add a message to this session."""
 
         with sqlite3.connect(self.db_path) as conn:
-            if not self._session_exists_conn(self.name, self.user_id, conn):
+            if not self._session_exists_conn(self.name, self.owner_id, conn):
                 raise ValueError(
-                    f"Session '{self.name}' does not exist for user {self.user_id}. Please save the session first."
+                    f"Session '{self.name}' does not exist for user {self.owner_id}. Please save the session first."
                 )
 
             cursor = conn.cursor()
             cursor.execute(
                 """
                 INSERT INTO messages 
-                (date, sender_id, sender_nickname, content, session_name, user_id)
+                (date, sender_id, sender_nickname, content, session_name, owner_id)
                 VALUES (?, ?, ?, ?, ?, ?)
             """,
                 message.to_db_tuple(),
@@ -186,23 +130,23 @@ class ChatSession:
             if limit:
                 cursor.execute(
                     """
-                    SELECT date, sender_id, sender_nickname, content, session_name, user_id
+                    SELECT date, sender_id, sender_nickname, content, session_name, owner_id
                     FROM messages 
-                    WHERE session_name = ? AND user_id = ?
+                    WHERE session_name = ? AND owner_id = ?
                     ORDER BY date DESC 
                     LIMIT ?
                 """,
-                    (self.name, self.user_id, limit),
+                    (self.name, self.owner_id, limit),
                 )
             else:
                 cursor.execute(
                     """
-                    SELECT date, sender_id, sender_nickname, content, session_name, user_id
+                    SELECT date, sender_id, sender_nickname, content, session_name, owner_id
                     FROM messages 
-                    WHERE session_name = ? AND user_id = ?
+                    WHERE session_name = ? AND owner_id = ?
                     ORDER BY date ASC
                 """,
-                    (self.name, self.user_id),
+                    (self.name, self.owner_id),
                 )
 
             rows = cursor.fetchall()
@@ -220,49 +164,49 @@ class ChatSession:
             cursor.execute(
                 """
                 DELETE FROM messages 
-                WHERE session_name = ? AND user_id = ?
+                WHERE session_name = ? AND owner_id = ?
             """,
-                (self.name, self.user_id),
+                (self.name, self.owner_id),
             )
 
             # Delete the session
             cursor.execute(
                 """
                 DELETE FROM sessions 
-                WHERE name = ? AND user_id = ?
+                WHERE name = ? AND owner_id = ?
             """,
-                (self.name, self.user_id),
+                (self.name, self.owner_id),
             )
 
             conn.commit()
 
     @staticmethod
-    def list_sessions(user_id: int, db_path: Path = DefaultBotDatabasePath) -> List[str]:
+    def list_sessions(owner_id: int, db_path: Path = DefaultBotDatabasePath) -> List[str]:
         """List all session names for a user."""
         with sqlite3.connect(db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                SELECT name FROM sessions WHERE user_id = ?
+                SELECT name FROM sessions WHERE owner_id = ?
             """,
-                (user_id,),
+                (owner_id,),
             )
             rows = cursor.fetchall()
             return [row[0] for row in rows]
 
     @staticmethod
-    def session_exists(name: str, user_id: int, db_path: Path = DefaultBotDatabasePath) -> bool:
+    def session_exists(name: str, owner_id: int, db_path: Path = DefaultBotDatabasePath) -> bool:
         """Check if a session exists for a user."""
         with sqlite3.connect(db_path) as conn:
-            return ChatSession._session_exists_conn(name, user_id, conn)
+            return ChatSession._session_exists_conn(name, owner_id, conn)
 
     @staticmethod
-    def _session_exists_conn(name: str, user_id: int, conn: sqlite3.Connection) -> bool:
+    def _session_exists_conn(name: str, owner_id: int, conn: sqlite3.Connection) -> bool:
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT 1 FROM sessions WHERE name = ? AND user_id = ?
+            SELECT 1 FROM sessions WHERE name = ? AND owner_id = ?
         """,
-            (name, user_id),
+            (name, owner_id),
         )
         return cursor.fetchone() is not None
