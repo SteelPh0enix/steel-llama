@@ -3,8 +3,10 @@ from __future__ import annotations
 import datetime
 import sqlite3
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
 from pathlib import Path
+from typing import List, Optional, Tuple
+
+import discord
 
 DefaultModelName = "<DEFAULT_MODEL>"
 DefaultBotDatabasePath = Path("./bot.db")
@@ -21,7 +23,7 @@ class ChatMessage:
     session_name: str
     user_id: int
 
-    def to_tuple(self) -> Tuple:
+    def to_db_tuple(self) -> Tuple:
         """Convert to tuple for database insertion."""
         return (
             self.date.isoformat(),
@@ -33,7 +35,7 @@ class ChatMessage:
         )
 
     @staticmethod
-    def from_tuple(data: Tuple) -> ChatMessage:
+    def from_db_tuple(data: Tuple) -> ChatMessage:
         """Create ChatMessage from database tuple."""
         return ChatMessage(
             date=datetime.datetime.fromisoformat(data[0]),
@@ -42,6 +44,26 @@ class ChatMessage:
             content=data[3],
             session_name=data[4],
             user_id=data[5],
+        )
+
+    @staticmethod
+    def from_discord_message(message: discord.Message, session_name: str) -> ChatMessage:
+        """Create ChatMessage from discord.Message.
+
+        Args:
+            message: The discord message to convert
+            session_name: The name of the chat session
+
+        Returns:
+            ChatMessage: A new ChatMessage instance
+        """
+        return ChatMessage(
+            date=message.created_at,
+            sender_id=message.author.id,
+            sender_nickname=message.author.display_name,
+            content=message.content,
+            session_name=session_name,
+            user_id=message.author.id,
         )
 
 
@@ -146,7 +168,7 @@ class ChatSession:
                 (date, sender_id, sender_nickname, content, session_name, user_id)
                 VALUES (?, ?, ?, ?, ?, ?)
             """,
-                message.to_tuple(),
+                message.to_db_tuple(),
             )
             conn.commit()
 
@@ -188,7 +210,7 @@ class ChatSession:
             if limit:
                 rows = reversed(rows)  # type: ignore
 
-            return [ChatMessage.from_tuple(row) for row in rows]
+            return [ChatMessage.from_db_tuple(row) for row in rows]
 
     def delete_session(self):
         """Delete this session and all its messages."""
