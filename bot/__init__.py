@@ -32,7 +32,7 @@ class Bot(commands.Bot):
         self.config = config
 
 
-def process_raw_response(raw_response: str, model_config: ModelConfig | None) -> str:
+def _process_raw_response(raw_response: str, model_config: ModelConfig | None) -> str:
     """
     Process raw LLM response and format it with thinking tags if available.
 
@@ -104,9 +104,9 @@ async def process_llm_response(
         response += chunk["response"]
 
         if time.time() - last_edit_time >= bot_config.edit_delay:
-            await message.edit(content=process_raw_response(response, model_config))
+            await message.edit(content=_process_raw_response(response, model_config))
             last_edit_time = time.time()
 
     # process last chunk
     if response != "":
-        await message.edit(content=process_raw_response(response, model_config))
+        await message.edit(content=_process_raw_response(response, model_config))
