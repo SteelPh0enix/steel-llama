@@ -269,6 +269,14 @@ class SqliteChatSession(ChatSession):
         return []
 
     @staticmethod
+    def disable_active_session(user_id: int, db_path: Path):
+        """Removes all active session markings for specified user"""
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM active_sessions WHERE owner_id = ?", (user_id,))
+            conn.commit()
+
+    @staticmethod
     def get_active_session(user_id: int, db_path: Path) -> SqliteChatSession | None:
         """Returns currently active chat session, or None if there isn't any"""
         with sqlite3.connect(db_path) as conn:

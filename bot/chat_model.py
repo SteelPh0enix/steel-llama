@@ -71,3 +71,11 @@ class ChatModel:
 
 def get_all_models() -> list[ChatModel]:
     return [ChatModel.from_ollama_model(model) for model in ollama.list().models]
+
+
+def model_exists(model_name: str) -> bool:
+    return model_name in [model.name for model in get_all_models()]
+
+
+def get_allowed_models(blacklist: list[str]) -> list[ChatModel]:
+    return [model for model in get_all_models() if model.name not in blacklist]

@@ -6,7 +6,7 @@ from discord.ext import commands
 from httpx import ConnectError
 
 from bot import Bot, process_llm_response
-from bot.chat_model import UnknownContextLengthValue, get_all_models
+from bot.chat_model import UnknownContextLengthValue, get_allowed_models
 
 LlmBackendUnavailableMessage: str = "**The LLM backend is currently unavailable, try again later.**"
 
@@ -143,7 +143,7 @@ class SteelLlamaCommands(commands.Cog):
     async def llm_list_models(self, ctx: commands.Context):
         """List all available models."""
         try:
-            models = get_all_models()
+            models = get_allowed_models(self.bot.config.models.excluded_models)
         except ConnectError:
             await ctx.message.reply(content=LlmBackendUnavailableMessage)
             return
@@ -151,12 +151,9 @@ class SteelLlamaCommands(commands.Cog):
             await ctx.message.reply(content=f"**Oops, an unknown error has happened: *{str(e)}***")
             return
 
-        excluded_models = self.bot.config.models.excluded_models
-        allowed_models = [model for model in models if model.name not in excluded_models]
-
         formatted_message = "# Available models:\n" + "\n".join(
             f"- **{model}** - {model.parameters_size} parameters, {model.quant} quantization, {model.context_length if model.context_length != UnknownContextLengthValue else 'Unknown'} context length"
-            for model in allowed_models
+            for model in models
         )
 
         await ctx.message.reply(formatted_message)
