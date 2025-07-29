@@ -6,12 +6,9 @@ from pathlib import Path
 
 from bot.chat_message import ChatMessage
 
-DefaultModelName = "<DEFAULT_MODEL>"
-DefaultBotDatabasePath = Path("./bot.db")
-
 
 class ChatSession:
-    def __init__(self, owner_id: int, name: str, model: str = DefaultModelName, system_prompt: str = "") -> None:
+    def __init__(self, owner_id: int, name: str, model: str, system_prompt: str = "") -> None:
         self._owner_id = owner_id
         self._name = name
         self._model = model
@@ -82,23 +79,22 @@ class SqliteChatSession(ChatSession):
         self,
         owner_id: int,
         name: str,
-        db_path: Path = DefaultBotDatabasePath,
+        db_path: Path,
     ):
-        super().__init__(owner_id, name, DefaultModelName, "")
+        super().__init__(owner_id, name, "", "")
         self._db_path = db_path
         self._init_database()
-        self.load()
 
     def _init_database(self):
         """Create necessary tables if they don't exist."""
         with sqlite3.connect(self._db_path) as conn:
             cursor = conn.cursor()
             # Create sessions table
-            cursor.execute(f"""
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS sessions (
                     owner_id INTEGER,
                     name TEXT,
-                    model TEXT DEFAULT '{DefaultModelName}',
+                    model TEXT,
                     system_prompt TEXT DEFAULT '',
                     PRIMARY KEY (owner_id, name)
                 )
@@ -176,7 +172,7 @@ class SqliteChatSession(ChatSession):
 
             conn.commit()
 
-    def load(self) -> None:
+    def load(self) -> bool:
         """Loads the session details from database, if they are stored there.
         Overwrites current model/prompt/messages if they exist in the database."""
         with sqlite3.connect(self._db_path) as conn:
@@ -195,6 +191,8 @@ class SqliteChatSession(ChatSession):
                 model, system_prompt = session_details
                 self._model = model
                 self._system_prompt = system_prompt
+            else:
+                return False
 
             cursor.execute(
                 """
@@ -221,6 +219,8 @@ class SqliteChatSession(ChatSession):
                     for (id, owner_id, sender_id, sender_nickname, session_name, timestamp, content) in messages
                 ]
 
+        return True
+
     def delete(self) -> None:
         """Deletes the session and all it's messages from database"""
         with sqlite3.connect(self._db_path) as conn:
@@ -232,7 +232,7 @@ class SqliteChatSession(ChatSession):
             conn.commit()
 
     @staticmethod
-    def list_user_sessions(user_id: int, db_path: Path = DefaultBotDatabasePath) -> list[str]:
+    def list_user_sessions(user_id: int, db_path: Path) -> list[str]:
         """Returns a list of session names for specified user."""
         with sqlite3.connect(db_path) as conn:
             cursor = conn.cursor()

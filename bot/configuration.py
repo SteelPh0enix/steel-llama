@@ -168,6 +168,12 @@ class BotConfig:
     """Maximum amount of messages fetched from the history for LLM context.
     The actual amount of used messages may be smaller if context is not large enough."""
 
+    session_db_path: Path
+    """Path of the SQLite database file used for storing chat sessions."""
+
+    default_system_prompt: str
+    """Default system prompt for the bot, always used for temporary (global) sessions."""
+
     @staticmethod
     def from_config(parser: configparser.ConfigParser) -> BotConfig:
         """
@@ -199,11 +205,16 @@ class BotConfig:
         if max_messages_for_context < 0:
             raise ValueError("Invalid context message limit, must be 0 or more")
 
+        session_db_path = parser.get("bot", "session_db_path")
+        default_system_prompt = parser.get("bot", "default_system_prompt")
+
         return BotConfig(
             discord_api_key=bot_api_key,
             bot_prefix=bot_prefix,
             edit_delay=bot_delay,
             max_messages_for_context=max_messages_for_context,
+            session_db_path=Path(session_db_path),
+            default_system_prompt=default_system_prompt,
         )
 
 
@@ -280,6 +291,8 @@ class Config:
             "bot_prefix": "$",
             "edit_delay_seconds": "0.5",
             "max_messages_for_context": "30",
+            "session_db_path": "./bot.db",
+            "default_system_prompt": "You are a Discord bot, proceed with the following conversation with the users. Every message is prefixed with a line containing the username (and user ID) of it's sender (prefixed with @) and the timestamp of the message.",
         }
 
         config["models.qwen3-*"] = {

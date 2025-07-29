@@ -1,8 +1,11 @@
 import time
 
 from discord import Message
+from discord.abc import MessageableChannel
 from discord.ext import commands
 
+from bot.chat_message import ChatMessage
+from bot.chat_session import ChatSession, SqliteChatSession
 from bot.configuration import BotConfig, Config, ModelConfig
 from bot.response import LLMResponse
 
@@ -30,6 +33,33 @@ class Bot(commands.Bot):
         """
         super().__init__(**kwargs)
         self.config = config
+        self.sessions: list[ChatSession] = []
+
+    def find_session(self, session_name: str, owner_id: int) -> ChatSession | None:
+        for session in self.sessions:
+            if session.name == session_name and session.owner_id == owner_id:
+                return session
+        return None
+
+    def load_session_from_db(self, session_name: str, owner_id: int) -> ChatSession | None:
+        if (stored_session := self.find_session(session_name, owner_id)) is not None:
+            return stored_session
+
+        session = SqliteChatSession(owner_id, session_name, db_path=self.config.bot.session_db_path)
+        if not session.load():
+            return None
+
+        self.sessions.append(session)
+
+        return session
+
+    async def create_temporary_session(self, session_name: str, channel: MessageableChannel) -> ChatSession:
+        session = ChatSession(owner_id=self.config.admin.id, name=session_name, model=self.config.models.default_model)
+
+        async for message in channel.history(limit=self.config.bot.max_messages_for_context):
+            session.add_message(ChatMessage.from_discord_message(message, session.name, session.owner_id))
+
+        return session
 
 
 def _process_raw_response(raw_response: str, model_config: ModelConfig | None) -> str:
