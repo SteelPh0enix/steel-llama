@@ -61,6 +61,9 @@ class Bot(commands.Bot):
 
         return session
 
+    def get_active_session(self, user_id: int) -> ChatSession | None:
+        return SqliteChatSession.get_active_session(user_id, self.config.bot.session_db_path)
+
 
 def _process_raw_response(raw_response: str, model_config: ModelConfig | None) -> str:
     """

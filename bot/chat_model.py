@@ -67,3 +67,7 @@ class ChatModel:
 
     def __str__(self) -> str:
         return self.name
+
+
+def get_all_models() -> list[ChatModel]:
+    return [ChatModel.from_ollama_model(model) for model in ollama.list().models]

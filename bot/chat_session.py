@@ -8,7 +8,7 @@ from bot.chat_message import ChatMessage
 
 
 class ChatSession:
-    def __init__(self, owner_id: int, name: str, model: str, system_prompt: str = "") -> None:
+    def __init__(self, owner_id: int, name: str, model: str = "", system_prompt: str = "") -> None:
         self._owner_id = owner_id
         self._name = name
         self._model = model
@@ -81,7 +81,7 @@ class SqliteChatSession(ChatSession):
         name: str,
         db_path: Path,
     ):
-        super().__init__(owner_id, name, "", "")
+        super().__init__(owner_id, name)
         self._db_path = db_path
         self._init_database()
 
@@ -110,6 +110,16 @@ class SqliteChatSession(ChatSession):
                     session_name TEXT,
                     timestamp TEXT,
                     content TEXT,
+                    FOREIGN KEY (owner_id, session_name) REFERENCES sessions (owner_id, name)
+                )
+                """)
+
+            # Create active sessions table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS active_sessions (
+                    owner_id INTEGER,
+                    session_name TEXT,
+                    UNIQUE (owner_id, session_name)
                     FOREIGN KEY (owner_id, session_name) REFERENCES sessions (owner_id, name)
                 )
                 """)
@@ -228,7 +238,23 @@ class SqliteChatSession(ChatSession):
 
             cursor.execute("DELETE FROM messages WHERE owner_id = ? AND session_name = ?", (self.owner_id, self.name))
             cursor.execute("DELETE FROM sessions WHERE owner_id = ? AND name = ?", (self.owner_id, self.name))
+            cursor.execute(
+                "DELETE FROM active_sessions WHERE owner_id = ? AND session_name = ?", (self.owner_id, self.name)
+            )
 
+            conn.commit()
+
+    def mark_as_active(self) -> None:
+        """Marks current session as active"""
+        with sqlite3.connect(self._db_path) as conn:
+            cursor = conn.cursor()
+
+            cursor.execute("DELETE FROM active_sessions WHERE owner_id = ?", (self.owner_id,))
+            conn.commit()
+
+            cursor.execute(
+                "INSERT INTO active_sessions(owner_id, session_name) VALUES (?, ?)", (self.owner_id, self.name)
+            )
             conn.commit()
 
     @staticmethod
@@ -241,3 +267,15 @@ class SqliteChatSession(ChatSession):
             return [session[0] for session in sessions]
 
         return []
+
+    @staticmethod
+    def get_active_session(user_id: int, db_path: Path) -> SqliteChatSession | None:
+        """Returns currently active chat session, or None if there isn't any"""
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+
+            cursor.execute("SELECT session_name FROM active_sessions WHERE owner_id = ?", (user_id,))
+            if (session_name := cursor.fetchone()) is not None:
+                return SqliteChatSession(user_id, session_name[0], db_path)
+
+            return None

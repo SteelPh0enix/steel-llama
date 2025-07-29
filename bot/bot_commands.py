@@ -1,12 +1,12 @@
 import asyncio
 
 import ollama
+from discord import Member, User
 from discord.ext import commands
-from discord import User, Member
 from httpx import ConnectError
 
 from bot import Bot, process_llm_response
-from bot.chat_model import ChatModel, UnknownContextLengthValue
+from bot.chat_model import UnknownContextLengthValue, get_all_models
 
 LlmBackendUnavailableMessage: str = "**The LLM backend is currently unavailable, try again later.**"
 
@@ -37,6 +37,10 @@ class SteelLlamaCommands(commands.Cog):
         message = await ctx.message.reply("*Processing...*")
 
         prompt = translate_mentions_into_usernames(prompt, ctx.message.mentions)
+
+        # find current session
+        # if not found, create a temporary session for current channel/thread
+        # and fill that session with recent messages up to the context length/user-configured amount
 
         model = self.bot.config.models.default_model
         model_config = self.bot.config.models.find_config_for_model(model)
@@ -139,7 +143,7 @@ class SteelLlamaCommands(commands.Cog):
     async def llm_list_models(self, ctx: commands.Context):
         """List all available models."""
         try:
-            models = [ChatModel.from_ollama_model(model) for model in ollama.list().models]
+            models = get_all_models()
         except ConnectError:
             await ctx.message.reply(content=LlmBackendUnavailableMessage)
             return
