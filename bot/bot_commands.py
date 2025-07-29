@@ -6,7 +6,7 @@ from discord import User, Member
 from httpx import ConnectError
 
 from bot import Bot, process_llm_response
-from bot.model import Model, UnknownContextLengthValue
+from bot.chat_model import ChatModel, UnknownContextLengthValue
 
 LlmBackendUnavailableMessage: str = "**The LLM backend is currently unavailable, try again later.**"
 
@@ -139,7 +139,7 @@ class SteelLlamaCommands(commands.Cog):
     async def llm_list_models(self, ctx: commands.Context):
         """List all available models."""
         try:
-            models = [Model.from_ollama_model(model) for model in ollama.list().models]
+            models = [ChatModel.from_ollama_model(model) for model in ollama.list().models]
         except ConnectError:
             await ctx.message.reply(content=LlmBackendUnavailableMessage)
             return

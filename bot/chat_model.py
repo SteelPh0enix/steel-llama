@@ -17,7 +17,7 @@ def find_context_length(info: Mapping[str, Any]) -> int:
 
 
 @dataclass
-class Model:
+class ChatModel:
     name: str
     tag: str
     size: str
@@ -26,7 +26,7 @@ class Model:
     context_length: int
 
     @staticmethod
-    def from_ollama_model(ollama_model: ollama.ListResponse.Model) -> Model:
+    def from_ollama_model(ollama_model: ollama.ListResponse.Model) -> ChatModel:
         name = ollama_model.model if ollama_model.model is not None else UnknownFieldValue
         tag = UnknownFieldValue
         ctx_length = UnknownContextLengthValue
@@ -47,7 +47,7 @@ class Model:
 
             quant = details.quantization_level if details.quantization_level is not None else UnknownFieldValue
 
-            return Model(
+            return ChatModel(
                 name=name,
                 tag=tag,
                 size=size,
@@ -56,7 +56,7 @@ class Model:
                 context_length=ctx_length,
             )
 
-        return Model(
+        return ChatModel(
             name=name,
             tag=tag,
             size=size,
