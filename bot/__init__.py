@@ -1,10 +1,10 @@
 import time
 
 from discord import Message
-from discord.abc import MessageableChannel
+from discord.abc import Messageable
 from discord.ext import commands
 
-from bot.chat_message import ChatMessage
+from bot.chat_message import ChatMessage, MessageRole
 from bot.chat_session import ChatSession, SqliteChatSession
 from bot.configuration import BotConfig, Config, ModelConfig
 from bot.response import LLMResponse
@@ -53,15 +53,16 @@ class Bot(commands.Bot):
 
         return session
 
-    async def create_temporary_session(self, session_name: str, channel: MessageableChannel) -> ChatSession:
+    async def create_temporary_session(self, session_name: str, llm_user_id: int, channel: Messageable) -> ChatSession:
         session = ChatSession(owner_id=self.config.admin.id, name=session_name, model=self.config.models.default_model)
 
         async for message in channel.history(limit=self.config.bot.max_messages_for_context):
-            session.add_message(ChatMessage.from_discord_message(message, session.name, session.owner_id))
+            role = MessageRole.ASSISTANT if message.author.id == llm_user_id else MessageRole.USER
+            session.add_message(ChatMessage.from_discord_message(message, role, session.name, session.owner_id))
 
         return session
 
-    def get_active_session(self, user_id: int) -> ChatSession | None:
+    def get_active_user_session(self, user_id: int) -> ChatSession | None:
         return SqliteChatSession.get_active_session(user_id, self.config.bot.session_db_path)
 
 

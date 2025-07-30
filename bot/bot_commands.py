@@ -6,12 +6,13 @@ from discord.ext import commands
 from httpx import ConnectError
 
 from bot import Bot, process_llm_response
-from bot.chat_model import UnknownContextLengthValue, get_allowed_models
+from bot.chat_message import ChatMessage, MessageRole
+from bot.chat_model import UnknownContextLengthValue, get_allowed_models, model_exists
 
 LlmBackendUnavailableMessage: str = "**The LLM backend is currently unavailable, try again later.**"
 
 
-def translate_mentions_into_usernames(message: str, mentions: list[User | Member]) -> str:
+def transform_mentions_into_usernames(message: str, mentions: list[User | Member]) -> str:
     for mention in mentions:
         message = message.replace(f"<@{mention.id}>", f"<@{mention.name} (UID: {mention.id})>")
     return message
@@ -22,7 +23,7 @@ class SteelLlamaCommands(commands.Cog):
         self.bot = bot
 
     @commands.command(name="llm")
-    async def respond(self, ctx: commands.Context, *, prompt: str | None):
+    async def respond(self, ctx: commands.Context):
         """Chat with the LLM
 
         Parameters
@@ -30,29 +31,51 @@ class SteelLlamaCommands(commands.Cog):
         prompt : str
             Message to send.
         """
-        if prompt is None:
-            await ctx.message.reply("*Error: no message, what do you want me to respond to?*")
+        response = await ctx.message.reply("*Starting up...*")
+        user_id = ctx.message.author.id
+        admin_id = self.bot.config.admin.id
+
+        session = self.bot.get_active_user_session(user_id)
+        if session is not None:
+            session.add_message(
+                ChatMessage.from_discord_message(ctx.message, MessageRole.USER, session.name, session.owner_id)
+            )
+        else:
+            await response.edit(content="*Reading chat history...*")
+            if self.bot.user is None:
+                await response.edit(
+                    content=f"*Bot is somehow not logged in, so i cannot determine which messages are mine.,. call the admin? <@{admin_id}>*"
+                )
+                return
+            session = await self.bot.create_temporary_session(
+                f"Temp-{ctx.message.channel.id}", self.bot.user.id, ctx.message.channel
+            )
+
+        if not model_exists(session.model):
+            await response.edit(
+                content=f"**Oops, model '{session.model}' for session '{session.name}' is not available, <@{admin_id}> fix that shit**"
+            )
             return
 
-        message = await ctx.message.reply("*Processing...*")
-
-        prompt = translate_mentions_into_usernames(prompt, ctx.message.mentions)
-
-        # find current session
-        # if not found, create a temporary session for current channel/thread
-        # and fill that session with recent messages up to the context length/user-configured amount
-
-        model = self.bot.config.models.default_model
-        model_config = self.bot.config.models.find_config_for_model(model)
+        model_config = self.bot.config.models.find_config_for_model(session.model)
 
         try:
-            stream = await asyncio.to_thread(ollama.generate, model, prompt, stream=True)
-
-            await process_llm_response(stream, message, self.bot.config.bot, model_config)
+            await response.edit(content="*Processing messages...*")
+            stream = await asyncio.to_thread(
+                ollama.chat,
+                model=session.model,
+                messages=session.to_ollama_session(self.bot.config.bot.max_messages_for_context),
+                stream=True,
+            )
+            await process_llm_response(stream, response, self.bot.config.bot, model_config)
         except ConnectError:
-            await message.edit(content=LlmBackendUnavailableMessage)
+            await response.edit(content=LlmBackendUnavailableMessage)
         except Exception as e:
-            await message.edit(content=f"**Oops, an unknown error has happened: *{str(e)}***")
+            await response.edit(content=f"**Oops, an unknown error has happened: *{str(e)}***")
+
+        session.add_message(
+            ChatMessage.from_discord_message(response, MessageRole.ASSISTANT, session.name, session.owner_id)
+        )
 
     @commands.command(name="llm-new-session")
     async def llm_new_session(self, ctx: commands.Context, session_name: str | None):

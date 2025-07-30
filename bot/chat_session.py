@@ -4,7 +4,7 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
-from bot.chat_message import ChatMessage
+from bot.chat_message import ChatMessage, MessageRole
 
 
 class ChatSession:
@@ -14,6 +14,9 @@ class ChatSession:
         self._model = model
         self._system_prompt = system_prompt
         self._messages: list[ChatMessage] = []
+
+    def to_ollama_session(self, limit: int | None = None) -> list[dict[str, str]]:
+        return [{"role": str(msg.role), "content": msg.content} for msg in self.messages(limit)]
 
     @property
     def owner_id(self) -> int:
@@ -109,6 +112,7 @@ class SqliteChatSession(ChatSession):
                     sender_nickname TEXT,
                     session_name TEXT,
                     timestamp TEXT,
+                    role TEXT,
                     content TEXT,
                     FOREIGN KEY (owner_id, session_name) REFERENCES sessions (owner_id, name)
                 )
@@ -166,7 +170,7 @@ class SqliteChatSession(ChatSession):
                     cursor.execute(
                         """
                         INSERT INTO messages
-                        (id, owner_id, sender_id, sender_nickname, session_name, timestamp, content)
+                        (id, owner_id, sender_id, sender_nickname, session_name, timestamp, role, content)
                         VALUES (?, ?, ?, ?, ?, ?, ?)                   
                         """,
                         (
@@ -176,6 +180,7 @@ class SqliteChatSession(ChatSession):
                             msg.sender_nickname,
                             msg.session_name,
                             msg.timestamp.isoformat(),
+                            str(msg.role),
                             msg.content,
                         ),
                     )
@@ -206,7 +211,7 @@ class SqliteChatSession(ChatSession):
 
             cursor.execute(
                 """
-                SELECT id, owner_id, sender_id, sender_nickname, session_name, timestamp, content
+                SELECT id, owner_id, sender_id, sender_nickname, session_name, timestamp, role, content
                 FROM messages
                 WHERE owner_id = ? AND session_name = ?
                 ORDER BY timestamp ASC
@@ -224,9 +229,10 @@ class SqliteChatSession(ChatSession):
                         sender_nickname=sender_nickname,
                         session_name=session_name,
                         timestamp=datetime.fromisoformat(timestamp),
+                        role=MessageRole(role),
                         content=content,
                     )
-                    for (id, owner_id, sender_id, sender_nickname, session_name, timestamp, content) in messages
+                    for (id, owner_id, sender_id, sender_nickname, session_name, timestamp, role, content) in messages
                 ]
 
         return True

@@ -5,6 +5,21 @@ from dataclasses import dataclass
 
 import discord
 
+from enum import StrEnum
+
+
+class MessageRole(StrEnum):
+    SYSTEM = "system"
+    USER = "user"
+    ASSISTANT = "assistant"
+    TOOL = "tool"
+
+
+def transform_mentions_into_usernames(message: str, mentions: list[discord.User | discord.Member]) -> str:
+    for mention in mentions:
+        message = message.replace(f"<@{mention.id}>", f"<@{mention.name} (UID: {mention.id})>")
+    return message
+
 
 @dataclass
 class ChatMessage:
@@ -16,10 +31,13 @@ class ChatMessage:
     sender_nickname: str
     session_name: str
     timestamp: datetime.datetime
+    role: MessageRole
     content: str
 
     @staticmethod
-    def from_discord_message(message: discord.Message, session_name: str, owner_id: int) -> ChatMessage:
+    def from_discord_message(
+        message: discord.Message, role: MessageRole, session_name: str, owner_id: int
+    ) -> ChatMessage:
         """Create ChatMessage from discord.Message.
 
         Args:
@@ -36,7 +54,8 @@ class ChatMessage:
             sender_nickname=message.author.display_name,
             session_name=session_name,
             timestamp=message.created_at,
-            content=message.content,
+            role=role,
+            content=transform_mentions_into_usernames(message.content, message.mentions),
         )
 
     def __str__(self) -> str:

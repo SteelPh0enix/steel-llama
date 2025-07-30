@@ -292,7 +292,7 @@ class Config:
             "edit_delay_seconds": "0.5",
             "max_messages_for_context": "30",
             "session_db_path": "./bot.db",
-            "default_system_prompt": "You are a Discord bot, proceed with the following conversation with the users. Every message is prefixed with a line containing the username (and user ID) of it's sender (prefixed with @) and the timestamp of the message.",
+            "default_system_prompt": "You are a Discord bot, proceed with the following conversation with the users. Every message is prefixed with a line containing the username (and user ID) of it's sender (prefixed with @) and the timestamp of the message. Messages directed specifically to you are prefixed with \"$llm\".",
         }
 
         config["models.qwen3-*"] = {
