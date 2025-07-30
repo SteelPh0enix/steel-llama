@@ -55,13 +55,22 @@ class Bot(commands.Bot):
         return session
 
     async def create_temporary_session(
-        self, session_name: str, llm_user_id: int, channel: Messageable, preserve_last_message: bool = False
+        self,
+        session_name: str,
+        llm_user_id: int,
+        channel: Messageable,
+        history_depth: int = 100,
+        preserve_last_message: bool = False,
     ) -> ChatSession:
-        session = ChatSession(owner_id=self.config.admin.id, name=session_name, model=self.config.models.default_model)
+        session = ChatSession(
+            owner_id=self.config.admin.id,
+            name=session_name,
+            model=self.config.models.default_model,
+            system_prompt=self.config.bot.default_system_prompt,
+        )
         messages_history = []
-        message_limit = self.config.bot.max_messages_for_context + (0 if preserve_last_message else 1)
 
-        async for message in channel.history(limit=message_limit):
+        async for message in channel.history(limit=history_depth + (0 if preserve_last_message else 1)):
             messages_history.append(message)
 
         for message in reversed(messages_history[1:]):
@@ -117,7 +126,7 @@ def _process_raw_response(raw_response: str, model_config: ModelConfig | None) -
     if (response.thoughts is not None) and (len(response.thoughts) > 0):
         return f"*{response.thoughts}*"
 
-    return "Waiting for response..."
+    return "*Waiting for response...*"
 
 
 async def process_llm_response(

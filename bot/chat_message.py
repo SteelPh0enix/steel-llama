@@ -59,4 +59,4 @@ class ChatMessage:
         )
 
     def __str__(self) -> str:
-        return f"From @{self.sender_nickname} (UID: {self.sender_id}) sent on {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}:\n{self.content}"
+        return f"@{self.sender_nickname}:\n{self.content}"

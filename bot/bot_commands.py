@@ -48,7 +48,10 @@ class SteelLlamaCommands(commands.Cog):
                 )
                 return
             session = await self.bot.create_temporary_session(
-                f"Temp-{ctx.message.channel.id}", self.bot.user.id, ctx.message.channel
+                f"Temp-{ctx.message.channel.id}",
+                self.bot.user.id,
+                ctx.message.channel,
+                self.bot.config.bot.max_messages_for_context,
             )
 
         if not model_exists(session.model):
@@ -61,7 +64,7 @@ class SteelLlamaCommands(commands.Cog):
 
         try:
             await response.edit(content="*Processing messages...*")
-            messages = session.to_ollama_session(self.bot.config.bot.max_messages_for_context)
+            messages = session.to_ollama_session()
             stream = await asyncio.to_thread(
                 ollama.chat,
                 model=session.model,

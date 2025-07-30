@@ -14,6 +14,7 @@ class ChatSession:
         self._model = model
         self._system_prompt = system_prompt
         self._messages: list[ChatMessage] = []
+        self._update_system_prompt()
 
     def to_ollama_session(self, limit: int | None = None) -> list[dict[str, str]]:
         return [{"role": str(msg.role), "content": str(msg)} for msg in self.messages(limit)]
@@ -53,10 +54,10 @@ class ChatSession:
     def system_prompt(self, new_system_prompt: str) -> None:
         self._system_prompt = new_system_prompt
         self._save_session_info()
+        self._update_system_prompt()
 
     def add_message(self, message: ChatMessage) -> None:
         self._messages.append(message)
-        self._messages.sort(key=lambda msg: msg.timestamp)
         self._save_session_messages()
 
     def messages(self, limit: int | None = None) -> list[ChatMessage]:
@@ -74,6 +75,24 @@ class ChatSession:
         # Implement if needed
         pass
 
+    def _update_system_prompt(self) -> None:
+        self._messages = [message for message in self._messages if message.role != MessageRole.SYSTEM]
+
+        if len(self.system_prompt) > 0:
+            system_message = ChatMessage(
+                id=-1,
+                owner_id=self.owner_id,
+                sender_id=self.owner_id,
+                sender_nickname="System",
+                session_name=self.name,
+                timestamp=datetime.min,
+                role=MessageRole.SYSTEM,
+                content=self.system_prompt,
+            )
+            self._messages.insert(0, system_message)
+
+        self._save_session_messages()
+
 
 class SqliteChatSession(ChatSession):
     """Represents a persistent chat session stored in SQLite database."""
@@ -84,9 +103,9 @@ class SqliteChatSession(ChatSession):
         name: str,
         db_path: Path,
     ):
-        super().__init__(owner_id, name)
         self._db_path = db_path
         self.create_database(self._db_path)
+        super().__init__(owner_id, name)
 
     @staticmethod
     def create_database(db_path: Path):
