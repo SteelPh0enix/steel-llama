@@ -61,10 +61,11 @@ class SteelLlamaCommands(commands.Cog):
 
         try:
             await response.edit(content="*Processing messages...*")
+            messages = session.to_ollama_session(self.bot.config.bot.max_messages_for_context)
             stream = await asyncio.to_thread(
                 ollama.chat,
                 model=session.model,
-                messages=session.to_ollama_session(self.bot.config.bot.max_messages_for_context),
+                messages=messages,
                 stream=True,
             )
             await process_llm_response(stream, response, self.bot.config.bot, model_config)

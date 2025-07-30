@@ -34,6 +34,7 @@ class Bot(commands.Bot):
         super().__init__(**kwargs)
         self.config = config
         self.sessions: list[ChatSession] = []
+        SqliteChatSession.create_database(self.config.bot.session_db_path)
 
     def find_session(self, session_name: str, owner_id: int) -> ChatSession | None:
         for session in self.sessions:
@@ -53,10 +54,22 @@ class Bot(commands.Bot):
 
         return session
 
-    async def create_temporary_session(self, session_name: str, llm_user_id: int, channel: Messageable) -> ChatSession:
+    async def create_temporary_session(
+        self, session_name: str, llm_user_id: int, channel: Messageable, preserve_last_message: bool = False
+    ) -> ChatSession:
         session = ChatSession(owner_id=self.config.admin.id, name=session_name, model=self.config.models.default_model)
+        messages_history = []
+        message_limit = self.config.bot.max_messages_for_context + (0 if preserve_last_message else 1)
 
-        async for message in channel.history(limit=self.config.bot.max_messages_for_context):
+        async for message in channel.history(limit=message_limit):
+            messages_history.append(message)
+
+        for message in reversed(messages_history[1:]):
+            role = MessageRole.ASSISTANT if message.author.id == llm_user_id else MessageRole.USER
+            session.add_message(ChatMessage.from_discord_message(message, role, session.name, session.owner_id))
+
+        if preserve_last_message:
+            message = messages_history[0]
             role = MessageRole.ASSISTANT if message.author.id == llm_user_id else MessageRole.USER
             session.add_message(ChatMessage.from_discord_message(message, role, session.name, session.owner_id))
 
@@ -135,7 +148,7 @@ async def process_llm_response(
     last_edit_time = time.time()
 
     for chunk in response_stream:
-        response += chunk["response"]
+        response += chunk["message"]["content"]
 
         if time.time() - last_edit_time >= bot_config.edit_delay:
             await message.edit(content=_process_raw_response(response, model_config))

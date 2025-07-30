@@ -86,11 +86,12 @@ class SqliteChatSession(ChatSession):
     ):
         super().__init__(owner_id, name)
         self._db_path = db_path
-        self._init_database()
+        self.create_database(self._db_path)
 
-    def _init_database(self):
+    @staticmethod
+    def create_database(db_path: Path):
         """Create necessary tables if they don't exist."""
-        with sqlite3.connect(self._db_path) as conn:
+        with sqlite3.connect(db_path) as conn:
             cursor = conn.cursor()
             # Create sessions table
             cursor.execute("""
