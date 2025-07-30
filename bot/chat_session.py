@@ -16,7 +16,7 @@ class ChatSession:
         self._messages: list[ChatMessage] = []
 
     def to_ollama_session(self, limit: int | None = None) -> list[dict[str, str]]:
-        return [{"role": str(msg.role), "content": msg.content} for msg in self.messages(limit)]
+        return [{"role": str(msg.role), "content": str(msg)} for msg in self.messages(limit)]
 
     @property
     def owner_id(self) -> int:
