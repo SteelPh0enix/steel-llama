@@ -7,7 +7,7 @@ from httpx import ConnectError
 
 from bot import Bot, process_llm_response
 from bot.chat_message import ChatMessage, MessageRole
-from bot.chat_model import UnknownContextLengthValue, get_allowed_models, model_exists
+from bot.chat_model import UnknownContextLengthValue, get_model
 
 LlmBackendUnavailableMessage: str = "**The LLM backend is currently unavailable, try again later.**"
 
@@ -54,16 +54,17 @@ class SteelLlamaCommands(commands.Cog):
                 self.bot.config.bot.max_messages_for_context,
             )
 
-        if not model_exists(session.model):
+        if session.model not in self.bot.config.models.models:
             await response.edit(
                 content=f"**Oops, model '{session.model}' for session '{session.name}' is not available, <@{admin_id}> fix that shit**"
             )
             return
 
-        model_config = self.bot.config.models.find_config_for_model(session.model)
+        model_config = self.bot.config.models.models[session.model]
 
         try:
             await response.edit(content="*Processing messages...*")
+            print(f"tokens sum: {session.tokens_count(model_config.tokenizer)}")
             messages = session.to_ollama_session()
             stream = await asyncio.to_thread(
                 ollama.chat,
@@ -170,7 +171,11 @@ class SteelLlamaCommands(commands.Cog):
     async def llm_list_models(self, ctx: commands.Context):
         """List all available models."""
         try:
-            models = get_allowed_models(self.bot.config.models.excluded_models)
+            models = [get_model(model_name) for model_name in self.bot.config.models.models.keys()]
+            filtered_models = [model for model in models if model is not None]
+            for model in models:
+                if model not in filtered_models:
+                    print(f"Warning: model {model} not available in ollama, but declared in config")
         except ConnectError:
             await ctx.message.reply(content=LlmBackendUnavailableMessage)
             return
@@ -180,7 +185,7 @@ class SteelLlamaCommands(commands.Cog):
 
         formatted_message = "# Available models:\n" + "\n".join(
             f"- **{model}** - {model.parameters_size} parameters, {model.quant} quantization, {model.context_length if model.context_length != UnknownContextLengthValue else 'Unknown'} context length"
-            for model in models
+            for model in filtered_models
         )
 
         await ctx.message.reply(formatted_message)

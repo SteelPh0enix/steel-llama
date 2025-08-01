@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import discord
 
 from enum import StrEnum
+from transformers import AutoTokenizer
 
 
 class MessageRole(StrEnum):
@@ -60,3 +61,9 @@ class ChatMessage:
 
     def __str__(self) -> str:
         return f"@{self.sender_nickname}:\n{self.content}"
+
+    def tokens(self, tokenizer_name_or_path: str) -> list[int]:
+        tokenizer = AutoTokenizer.from_pretrained(tokenizer_name_or_path)
+        tokens = tokenizer.encode(str(self))
+        print(f"tokens for {str(self)}:\n{tokens}")
+        return tokens

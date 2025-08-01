@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import configparser
-import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List
+
+from transformers import AutoTokenizer
+
+from bot.chat_model import get_model
 
 
 @dataclass
@@ -17,8 +19,11 @@ class ModelConfig:
     thinking_suffix: str | None
     """Suffix to use when the model is thinking (optional)."""
 
+    tokenizer: str
+    """Name or path to tokenizer used for this model."""
+
     @staticmethod
-    def from_config_section(parser: configparser.ConfigParser, section: str) -> ModelConfig:
+    def from_config_section(parser: configparser.ConfigParser, section: str, model_name: str) -> ModelConfig:
         """
         Create a ModelConfig instance from a config section.
 
@@ -41,6 +46,7 @@ class ModelConfig:
         """
         thinking_prefix = parser.get(section, "thinking_prefix", fallback=None)
         thinking_suffix = parser.get(section, "thinking_suffix", fallback=None)
+        tokenizer = parser.get(section, "tokenizer")
 
         # user must specify both or neither
         if thinking_prefix is not None and thinking_suffix is None:
@@ -49,41 +55,30 @@ class ModelConfig:
         if thinking_suffix is not None and thinking_prefix is None:
             raise ValueError(f"Missing thinking prefix in section {section}")
 
-        return ModelConfig(thinking_prefix=thinking_prefix, thinking_suffix=thinking_suffix)
+        # make sure that the tokenizer is valid
+        print(f"Validating tokenizer '{tokenizer}'...")
+        AutoTokenizer.from_pretrained(tokenizer)
+        print(f"Tokenizer '{tokenizer}' is OK, checking if model is available...")
+        if get_model(model_name) is None:
+            raise ValueError(f"Model {model_name} is not available!")
+        print(f"Model {model_name} is available!")
+
+        return ModelConfig(
+            thinking_prefix=thinking_prefix,
+            thinking_suffix=thinking_suffix,
+            tokenizer=tokenizer,
+        )
 
 
 @dataclass
 class ModelsConfig:
     """Configuration for all models used by the bot."""
 
-    excluded_models: List[str]
-    """List of model names to exclude from being used."""
-
     default_model: str
     """The model name to use as a default when none is specified."""
 
-    models_config: dict[str, ModelConfig]
+    models: dict[str, ModelConfig]
     """Dictionary mapping model patterns to their specific configurations."""
-
-    def find_config_for_model(self, model_name: str) -> ModelConfig | None:
-        """
-        Find the configuration for a given model.
-
-        Parameters
-        ----------
-        model_name : str
-            The name of the model to look up.
-
-        Returns
-        -------
-        ModelConfig | None
-            The matching model configuration if found, otherwise None.
-        """
-        for key, value in self.models_config.items():
-            pattern = re.escape(key).replace(r"\*", ".*")
-            if re.fullmatch(pattern, model_name):
-                return value
-        return None
 
     @staticmethod
     def from_config(parser: configparser.ConfigParser) -> ModelsConfig:
@@ -105,23 +100,20 @@ class ModelsConfig:
         ValueError
             If the default model is in the list of excluded models.
         """
-        excluded_models_str = parser.get("models", "excluded_models")
-        excluded_models = [model.strip() for model in excluded_models_str.split(",")]
         default_model = parser.get("models", "default_model")
-
-        if default_model in excluded_models:
-            raise ValueError("Default model cannot be one of the excluded models.")
 
         models_config: dict[str, ModelConfig] = {}
         for section in parser.sections():
             if section.startswith("models."):
-                model_wildcard_name = section[7:]
-                models_config[model_wildcard_name] = ModelConfig.from_config_section(parser, section)
+                model_name = section[7:]
+                models_config[model_name] = ModelConfig.from_config_section(parser, section, model_name)
+
+        if default_model not in models_config:
+            raise ValueError(f"Default model '{default_model}' doesn't have a config section in configuration file!")
 
         return ModelsConfig(
-            excluded_models=excluded_models,
             default_model=default_model,
-            models_config=models_config,
+            models=models_config,
         )
 
 
@@ -280,8 +272,7 @@ class Config:
         config = configparser.ConfigParser()
 
         config["models"] = {
-            "excluded_models": "model1, model2",
-            "default_model": "default_model_name",
+            "default_model": "qwen3-8b",
         }
 
         config["admin"] = {"id": "12345"}
@@ -292,12 +283,13 @@ class Config:
             "edit_delay_seconds": "0.5",
             "max_messages_for_context": "30",
             "session_db_path": "./bot.db",
-            "default_system_prompt": "You are a Discord bot, proceed with the following conversation with the users. Every message is prefixed with a line containing the username (and user ID) of it's sender (prefixed with @) and the timestamp of the message. Messages directed specifically to you are prefixed with \"$llm\".",
+            "default_system_prompt": 'You are a Discord bot, proceed with the following conversation with the users. Every message is prefixed with a line containing the username (and user ID) of it\'s sender (prefixed with @) and the timestamp of the message. Messages directed specifically to you are prefixed with "$llm".',
         }
 
-        config["models.qwen3-*"] = {
+        config["models.qwen3-8b"] = {
             "thinking_prefix": "<think>",
             "thinking_suffix": "</think>",
+            "tokenizer": "Qwen/Qwen3-8B",
         }
 
         with open(file_path, "w") as f:

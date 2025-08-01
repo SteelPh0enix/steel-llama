@@ -19,6 +19,10 @@ class ChatSession:
     def to_ollama_session(self, limit: int | None = None) -> list[dict[str, str]]:
         return [{"role": str(msg.role), "content": str(msg)} for msg in self.messages(limit)]
 
+    def tokens_count(self, tokenizer_name_or_path: str, messages_limit: int | None = None) -> int:
+        tokens = sum([len(msg.tokens(tokenizer_name_or_path)) for msg in self.messages(messages_limit)])
+        return tokens
+
     @property
     def owner_id(self) -> int:
         return self._owner_id
