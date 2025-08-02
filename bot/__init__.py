@@ -134,6 +134,7 @@ async def process_llm_response(
     message: Message,
     bot_config: BotConfig,
     model_config: ModelConfig | None,
+    is_chat_response: bool = True,
 ):
     """
     Process a stream of LLM responses and update the Discord message.
@@ -157,7 +158,10 @@ async def process_llm_response(
     last_edit_time = time.time()
 
     for chunk in response_stream:
-        response += chunk["message"]["content"]
+        if is_chat_response:
+            response += chunk["message"]["content"]
+        else:
+            response += chunk["response"]
 
         if time.time() - last_edit_time >= bot_config.edit_delay:
             await message.edit(content=_process_raw_response(response, model_config))
