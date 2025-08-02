@@ -7,7 +7,7 @@ from httpx import ConnectError
 
 from bot import Bot, process_llm_response
 from bot.chat_message import ChatMessage, MessageRole
-from bot.chat_model import UnknownContextLengthValue, get_all_models, get_model
+from bot.chat_model import UnknownContextLengthValue, get_all_models
 from bot.chat_session import ChatSession
 
 LlmBackendUnavailableMessage: str = "**The LLM backend is currently unavailable, try again later.**"
@@ -72,18 +72,30 @@ class SteelLlamaCommands(commands.Cog):
         await response.edit(content="*Processing messages...*")
 
         try:
-            prompt = session.to_llm_prompt(model_config.tokenizer)
+            prompt = session.to_llm_prompt(model_config)
             if prompt is None:
                 # TODO: roughly count the amount of tokens and check if the session fits
-                stream = await asyncio.to_thread(
+                chat_stream = await asyncio.to_thread(
                     ollama.chat,
                     model=session.model,
                     messages=session.to_llm_messages_list(),
                     stream=True,
                 )
+                await process_llm_response(
+                    chat_stream, response, self.bot.config.bot, model_config, is_chat_response=True
+                )
             else:
                 prompt_message, prompt_length = prompt
-            await process_llm_response(stream, response, self.bot.config.bot, model_config)
+                generate_stream = await asyncio.to_thread(
+                    ollama.generate,
+                    model=session.model,
+                    prompt=prompt_message,
+                    raw=True,
+                    stream=True,
+                )
+                await process_llm_response(
+                    generate_stream, response, self.bot.config.bot, model_config, is_chat_response=False
+                )
         except ConnectError:
             await response.edit(content=LlmBackendUnavailableMessage)
         except Exception as e:

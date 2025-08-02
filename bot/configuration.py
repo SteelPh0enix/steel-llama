@@ -24,7 +24,7 @@ class ModelConfig:
     """Maximum amount of tokens for a prompt (only input tokens)"""
 
     @staticmethod
-    def from_config_section(parser: configparser.ConfigParser, section: str, model_name: str) -> ModelConfig:
+    def from_config_section(parser: configparser.ConfigParser, section: str) -> ModelConfig:
         """
         Create a ModelConfig instance from a config section.
 
@@ -115,7 +115,7 @@ class ModelsConfig:
         for section in parser.sections():
             if section.startswith("models."):
                 model_name = section[7:]
-                models_config[model_name] = ModelConfig.from_config_section(parser, section, model_name)
+                models_config[model_name] = ModelConfig.from_config_section(parser, section)
 
         if default_model not in models_config:
             raise ValueError(f"Default model '{default_model}' doesn't have a config section in configuration file!")
