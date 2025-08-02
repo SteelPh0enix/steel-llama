@@ -6,8 +6,6 @@ from pathlib import Path
 
 from transformers import AutoTokenizer
 
-from bot.chat_model import get_model
-
 
 @dataclass
 class ModelConfig:
@@ -19,8 +17,11 @@ class ModelConfig:
     thinking_suffix: str | None
     """Suffix to use when the model is thinking (optional)."""
 
-    tokenizer: str
-    """Name or path to tokenizer used for this model."""
+    tokenizer: AutoTokenizer
+    """Tokenizer used for this model."""
+
+    context_limit: int | None
+    """Maximum amount of tokens for a prompt (only input tokens)"""
 
     @staticmethod
     def from_config_section(parser: configparser.ConfigParser, section: str, model_name: str) -> ModelConfig:
@@ -33,6 +34,8 @@ class ModelConfig:
             The configuration parser containing the section.
         section : str
             The name of the config section to read from.
+        model_name : str
+            Name of the configured model (for chat_model module)
 
         Returns
         -------
@@ -46,7 +49,8 @@ class ModelConfig:
         """
         thinking_prefix = parser.get(section, "thinking_prefix", fallback=None)
         thinking_suffix = parser.get(section, "thinking_suffix", fallback=None)
-        tokenizer = parser.get(section, "tokenizer")
+        tokenizer_name_or_path = parser.get(section, "tokenizer")
+        context_limit = parser.getint(section, "context_limit", fallback=None)
 
         # user must specify both or neither
         if thinking_prefix is not None and thinking_suffix is None:
@@ -56,17 +60,15 @@ class ModelConfig:
             raise ValueError(f"Missing thinking prefix in section {section}")
 
         # make sure that the tokenizer is valid
-        print(f"Validating tokenizer '{tokenizer}'...")
-        AutoTokenizer.from_pretrained(tokenizer)
-        print(f"Tokenizer '{tokenizer}' is OK, checking if model is available...")
-        if get_model(model_name) is None:
-            raise ValueError(f"Model {model_name} is not available!")
-        print(f"Model {model_name} is available!")
+        print(f"Creating tokenizer '{tokenizer_name_or_path}'...")
+        tokenizer = AutoTokenizer.from_pretrained(tokenizer_name_or_path)
+        print(f"Tokenizer '{tokenizer_name_or_path}' created successfully!")
 
         return ModelConfig(
             thinking_prefix=thinking_prefix,
             thinking_suffix=thinking_suffix,
             tokenizer=tokenizer,
+            context_limit=context_limit,
         )
 
 
@@ -79,6 +81,13 @@ class ModelsConfig:
 
     models: dict[str, ModelConfig]
     """Dictionary mapping model patterns to their specific configurations."""
+
+    def get_model_config(self, full_model_name: str) -> ModelConfig | None:
+        """Returns configuration for a model based on it's full name"""
+        for model_name, model in self.models.items():
+            if full_model_name.startswith(model_name):
+                return model
+        return None
 
     @staticmethod
     def from_config(parser: configparser.ConfigParser) -> ModelsConfig:

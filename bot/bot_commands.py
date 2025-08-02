@@ -1,13 +1,14 @@
 import asyncio
 
 import ollama
-from discord import Member, User
+from discord import Member, User, Message
 from discord.ext import commands
 from httpx import ConnectError
 
 from bot import Bot, process_llm_response
 from bot.chat_message import ChatMessage, MessageRole
-from bot.chat_model import UnknownContextLengthValue, get_model
+from bot.chat_model import UnknownContextLengthValue, get_all_models, get_model
+from bot.chat_session import ChatSession
 
 LlmBackendUnavailableMessage: str = "**The LLM backend is currently unavailable, try again later.**"
 
@@ -22,16 +23,7 @@ class SteelLlamaCommands(commands.Cog):
     def __init__(self, bot: Bot):
         self.bot = bot
 
-    @commands.command(name="llm")
-    async def respond(self, ctx: commands.Context):
-        """Chat with the LLM
-
-        Parameters
-        ----------
-        prompt : str
-            Message to send.
-        """
-        response = await ctx.message.reply("*Starting up...*")
+    async def get_session_for_response(self, ctx: commands.Context, response: Message) -> ChatSession | None:
         user_id = ctx.message.author.id
         admin_id = self.bot.config.admin.id
 
@@ -46,7 +38,7 @@ class SteelLlamaCommands(commands.Cog):
                 await response.edit(
                     content=f"*Bot is somehow not logged in, so i cannot determine which messages are mine.,. call the admin? <@{admin_id}>*"
                 )
-                return
+                return None
             session = await self.bot.create_temporary_session(
                 f"Temp-{ctx.message.channel.id}",
                 self.bot.user.id,
@@ -58,20 +50,39 @@ class SteelLlamaCommands(commands.Cog):
             await response.edit(
                 content=f"**Oops, model '{session.model}' for session '{session.name}' is not available, <@{admin_id}> fix that shit**"
             )
+            return None
+
+        return session
+
+    @commands.command(name="llm")
+    async def respond(self, ctx: commands.Context):
+        """Chat with the LLM
+
+        Parameters
+        ----------
+        prompt : str
+            Message to send.
+        """
+        response = await ctx.message.reply("*Starting up...*")
+        session = await self.get_session_for_response(ctx, response)
+        if session is None:
             return
 
         model_config = self.bot.config.models.models[session.model]
+        await response.edit(content="*Processing messages...*")
 
         try:
-            await response.edit(content="*Processing messages...*")
-            print(f"tokens sum: {session.tokens_count(model_config.tokenizer)}")
-            messages = session.to_ollama_session()
-            stream = await asyncio.to_thread(
-                ollama.chat,
-                model=session.model,
-                messages=messages,
-                stream=True,
-            )
+            prompt = session.to_llm_prompt(model_config.tokenizer)
+            if prompt is None:
+                # TODO: roughly count the amount of tokens and check if the session fits
+                stream = await asyncio.to_thread(
+                    ollama.chat,
+                    model=session.model,
+                    messages=session.to_llm_messages_list(),
+                    stream=True,
+                )
+            else:
+                prompt_message, prompt_length = prompt
             await process_llm_response(stream, response, self.bot.config.bot, model_config)
         except ConnectError:
             await response.edit(content=LlmBackendUnavailableMessage)
@@ -171,11 +182,7 @@ class SteelLlamaCommands(commands.Cog):
     async def llm_list_models(self, ctx: commands.Context):
         """List all available models."""
         try:
-            models = [get_model(model_name) for model_name in self.bot.config.models.models.keys()]
-            filtered_models = [model for model in models if model is not None]
-            for model in models:
-                if model not in filtered_models:
-                    print(f"Warning: model {model} not available in ollama, but declared in config")
+            models = get_all_models(self.bot.config.models)
         except ConnectError:
             await ctx.message.reply(content=LlmBackendUnavailableMessage)
             return
@@ -185,7 +192,7 @@ class SteelLlamaCommands(commands.Cog):
 
         formatted_message = "# Available models:\n" + "\n".join(
             f"- **{model}** - {model.parameters_size} parameters, {model.quant} quantization, {model.context_length if model.context_length != UnknownContextLengthValue else 'Unknown'} context length"
-            for model in filtered_models
+            for model in models
         )
 
         await ctx.message.reply(formatted_message)

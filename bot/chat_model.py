@@ -5,6 +5,8 @@ from typing import Any, Mapping
 
 import ollama
 
+from bot.configuration import ModelConfig, ModelsConfig
+
 UnknownFieldValue: str = "Unknown"
 UnknownContextLengthValue: int = -1
 
@@ -26,7 +28,7 @@ class ChatModel:
     context_length: int
 
     @staticmethod
-    def from_ollama_model(ollama_model: ollama.ListResponse.Model) -> ChatModel:
+    def from_ollama_model(ollama_model: ollama.ListResponse.Model, model_config: ModelConfig) -> ChatModel:
         name = ollama_model.model if ollama_model.model is not None else UnknownFieldValue
         tag = UnknownFieldValue
         ctx_length = UnknownContextLengthValue
@@ -36,6 +38,9 @@ class ChatModel:
             if model_info.modelinfo is not None:
                 ctx_length = find_context_length(model_info.modelinfo)
 
+        if model_config.context_limit is not None:
+            ctx_length = model_config.context_limit
+
         name_split = name.split(":")
         if len(name_split) == 2:
             name, tag = name_split[0], name_split[1]
@@ -44,7 +49,6 @@ class ChatModel:
 
         if (details := ollama_model.details) is not None:
             parameters = details.parameter_size if details.parameter_size is not None else UnknownFieldValue
-
             quant = details.quantization_level if details.quantization_level is not None else UnknownFieldValue
 
             return ChatModel(
@@ -69,12 +73,18 @@ class ChatModel:
         return self.name
 
 
-def get_all_models() -> list[ChatModel]:
-    return [ChatModel.from_ollama_model(model) for model in ollama.list().models]
-
-
-def get_model(name: str) -> ChatModel | None:
+def get_all_models(configs: ModelsConfig) -> list[ChatModel]:
+    models: list[ChatModel] = []
     for model in ollama.list().models:
-        if model.model is not None and model.model.startswith(name):
-            return ChatModel.from_ollama_model(model)
+        model_name = model.model if model.model is not None else ""
+        if (model_config := configs.get_model_config(model_name)) is not None:
+            models.append(ChatModel.from_ollama_model(model, model_config))
+    return models
+
+
+def get_model(name: str, configs: ModelsConfig) -> ChatModel | None:
+    for model in ollama.list().models:
+        model_name = model.model if model.model is not None else ""
+        if (model_config := configs.get_model_config(model_name)) is not None:
+            return ChatModel.from_ollama_model(model, model_config)
     return None

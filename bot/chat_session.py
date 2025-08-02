@@ -4,6 +4,8 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
+from transformers import AutoTokenizer
+
 from bot.chat_message import ChatMessage, MessageRole
 
 
@@ -16,12 +18,18 @@ class ChatSession:
         self._messages: list[ChatMessage] = []
         self._update_system_prompt()
 
-    def to_ollama_session(self, limit: int | None = None) -> list[dict[str, str]]:
+    def to_llm_messages_list(self, limit: int | None = None) -> list[dict[str, str]]:
         return [{"role": str(msg.role), "content": str(msg)} for msg in self.messages(limit)]
 
-    def tokens_count(self, tokenizer_name_or_path: str, messages_limit: int | None = None) -> int:
-        tokens = sum([len(msg.tokens(tokenizer_name_or_path)) for msg in self.messages(messages_limit)])
-        return tokens
+    def to_llm_prompt(self, tokenizer_name_or_path: str, limit: int | None = None) -> tuple[str, int] | None:
+        """Converts the session into a tokenized LLM prompt and returns it (and it's length in tokens), or None if current model does not have chat template provided."""
+        messages = self.to_llm_messages_list(limit)
+        tokenizer = AutoTokenizer.from_pretrained(tokenizer_name_or_path)
+        if not hasattr(tokenizer, "chat_template"):
+            return None
+        prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        tokenized_prompt = tokenizer.encode(prompt)
+        return prompt, len(tokenized_prompt)
 
     @property
     def owner_id(self) -> int:
