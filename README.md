@@ -6,7 +6,6 @@ This bot is a bridge between Discord and Ollama, with it's own user and session 
 
 ## Features
 
-- Bot's response can be triggered simply by mentioning it in a message.
 - By default, the bot uses the recent chat history as context. Amount of messages stored in context depends on maximum context size and bot's configuration.
 - Sessions are stored in bot's database and active session can be selected by the user via bot commands.
 - Users can start their own, private sessions that contain only the conversation between them and the bot. Sessions are identified by IDs provided by the user.
@@ -20,9 +19,9 @@ Configuration is stored in configparser-compatible .ini file.
 
 ## Bot commands
 
-Commands can be triggered by mentioning the bot, followed by command name and arguments.
-For the sake of following examples, `$llm` is the bot's command prefix, and `@username` is the username.
-Bot should respond to the message that triggered the command. If the command name is unknown, bot will respond with `Unknown command: [command name]`.
+Commands can be triggered by starting the message with bot's prefix, followed by command name and arguments.
+For the sake of following examples, `$` is the bot's command prefix, and `@username` is the username.
+Bot should respond to the message that triggered the command. If the command name is unknown, bot will not respond.
 
 ### Trigger bot response
 
@@ -74,8 +73,6 @@ Bot's response:
 *Created and switched to MyCustomSession*
 ```
 
-This will also automatically switch to MyCustomSession.
-
 ### List available sessions
 
 ```text
@@ -86,8 +83,8 @@ Bot's response:
 
 ```text
 List of your sessions:
-- MyCustomSession
-- OtherSession
+- MyCustomSession (model: SomeModel)
+- OtherSession (model: SomeOtherModel)
 ```
 
 ### Change current session
@@ -162,7 +159,7 @@ Available models:
 - ModelCName - 4B parameters, Q8_0 quantization
 ```
 
-Models can be blacklisted in configuration to prevent them from showing on the list.
+Models must be defined in configuration file, see [Configuration file](#configuration-file) section.
 
 ### Set model for a session
 
@@ -176,17 +173,14 @@ Bot's response:
 Changed model for session MyCustomSession to ModelCName (4B parameters, Q8_0 quantization)
 ```
 
-Only the bot's admin can set the model for `global` session.
-If an unauthorized user tries to do that, bot responds with `Error: you are not authorized to do that.`
+Model for global session is stored in bot's [configuration file](#configuration-file).
 
 ## Configuration file
 
 ```ini
 [models]
-# Names of models excluded from the use, comma-separated
-excluded_models = model1, model2
 # The model to use by default
-default_model = default_model_name
+default_model = qwen3-8b
 
 [admin]
 # Discord ID of administrator's account.
@@ -201,9 +195,22 @@ bot_prefix = $
 edit_delay_seconds = 0.5
 # Maximum number of messages to use for context
 max_messages_for_context = 30
+# Path to sessions database
+session_db_path = ./bot.db
+# Default system prompt for all sessions
+default_system_prompt = You are SteelLlama, an LLM-powered Discord bot, proceed with the following conversation with the users. Every message is prefixed with a line containing the username of sender (prefixed with @). DO NOT add that prefix to your messages, use it only to identify the authors. Messages directed specifically to you are prefixed with "$llm".
 
-[models.qwen3-*]
+# Every supported model must have a section in configuration
+[models.qwen3-8b]
 # Optional prefix and suffix for thinking indicator (used for models like qwen3)
 thinking_prefix = "<think>"
 thinking_suffix = "</think>"
+# Best to provide name/path to `transformers`-compatible tokenizer for precise token counting
+tokenizer = Qwen/Qwen3-8B 
+# Context limit is optional, by default the one reported by ollama is used
+context_limit = 65536
 ```
+
+## Operations
+
+This section contains information about internal workings of the bot, for documentation and vibecoding purposes.
