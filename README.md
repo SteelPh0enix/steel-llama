@@ -214,3 +214,58 @@ context_limit = 65536
 ## Operations
 
 This section contains information about internal workings of the bot, for documentation and vibecoding purposes.
+
+### Prompt processing
+
+When the user calls `llm` function of the bot, the bot starts with looking for current session for the user.
+If there's no entry in persistent database that specifies the user has a private session enabled, temporary global session is created.
+Temporary session contains last X messages (the amount can be specified in config and it does not count the prompt message itself) from the channel user requests response in.
+
+The bot also verifies that the model used for response is available. If it's not, it will respond with an error instead of proceeding.
+
+After creating the session, one of two things can happen.
+If the current model has tokenizer specified, and the tokenizer contains chat template, it's used to create a prompt for ollama's `generate` endpoint, and it's length (in tokens) is calculated.
+If it doesn't, raw list of messages is used with ollama's `chat` endpoint, and prompt length is estimated based on the length of each message.
+
+Then, prompt length is compared to model's context length.
+If it's too long, the bot will calculate the length (in tokens) of each message in session and try to create a prompt that fits the context by removing older messages until it fits.
+If it's not possible (user's prompt itself is too long for context), the bot will respond with an error instead of proceeding.
+
+After constructing a valid prompt or list of messages, the generation/chat is requested and we go into [LLM response processing](#llm-response-processing)
+
+### LLM response processing
+
+The output of an LLM is asynchronously streamed into a string.
+That string is then processed into a proper LLM message in progressive fashion (each chunk is added to existing message instead of re-processing it each time). Every Y seconds (the interval can be specified in configuration file), bot's Discord response is updated with the content of LLM's message.
+
+Discord has a 2000-character limit for text messages. In order to make sure the LLM response is sent correctly, and won't throw an error when it reaches that limit, the response length is calculated before each Discord response update.
+If the length of the response is above 2000 characters, bot will stop updating the existing response and will create a new one (as a new response to the existing one), and continue editing it until it hits 2000 characters, in which case it will repeat this process until the LLM finishes generation.
+
+```mermaid
+graph TD
+    A[User calls llm function] --> B{Session exists?}
+    B -- No --> C[Create temporary global session]
+    B -- Yes --> D[Use existing session]
+    C --> D
+    D --> E{Model available?}
+    E -- No --> F[Respond with error]
+    E -- Yes --> G{Tokenizer available?}
+    G -- Yes --> H[Use chat template for prompt]
+    G -- No --> I[Use raw messages list]
+    H --> J[Calculate prompt length]
+    I --> J
+    J --> K{Prompt fits context?}
+    K -- No --> L[Remove older messages until it fits]
+    K -- Yes --> M[Proceed to LLM]
+    L --> M
+    M --> N[Request generation/chat from Ollama]
+    N --> O[Stream response asynchronously]
+    O --> P[Process response chunks]
+    P --> Q{Response length > 2000?}
+    Q -- Yes --> R[Create new message]
+    Q -- No --> S[Update existing response]
+    R --> S
+    S --> T{LLM finished?}
+    T -- No --> P
+    T -- Yes --> U[Done]
+```
