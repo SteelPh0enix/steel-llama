@@ -7,32 +7,13 @@ from discord.ext import commands
 from bot.chat_message import ChatMessage, MessageRole
 from bot.chat_session import ChatSession, SqliteChatSession
 from bot.configuration import BotConfig, Config, ModelConfig
-from bot.response import LLMResponse
+from bot.llm_response import LLMResponse
 
 DiscordMessageLengthLimit: int = 2000
 
 
 class Bot(commands.Bot):
-    """
-    Main class for the Discord bot.
-
-    Parameters
-    ----------
-    config : Config
-        The configuration object containing all settings for the bot.
-    """
-
     def __init__(self, config: Config, **kwargs):
-        """
-        Initialize the Bot instance.
-
-        Parameters
-        ----------
-        config : Config
-            The configuration object containing all settings for the bot.
-        **kwargs
-            Additional keyword arguments passed to the parent class constructor.
-        """
         super().__init__(**kwargs)
         self.config = config
         self.sessions: list[ChatSession] = []
@@ -91,21 +72,6 @@ class Bot(commands.Bot):
 
 
 def _process_raw_llm_response(raw_response: str, model_config: ModelConfig | None) -> str:
-    """
-    Process raw LLM response and format it with thinking tags if available.
-
-    Parameters
-    ----------
-    raw_response : str
-        The raw text response from the LLM.
-    model_config : ModelConfig | None
-        Configuration for the specific model, which may include thinking prefix/suffix.
-
-    Returns
-    -------
-    str
-        Formatted response string with optional thinking tags.
-    """
     thinking_tags: tuple[str, str] | None = None
     if (
         (model_config is not None)
@@ -138,24 +104,6 @@ async def process_llm_response(
     model_config: ModelConfig | None,
     is_chat_response: bool = True,
 ):
-    """
-    Process a stream of LLM responses and update the Discord message.
-
-    Parameters
-    ----------
-    response_stream : iterable
-        Stream of response chunks from the LLM.
-    message : Message
-        The Discord message to be updated with the response.
-    bot_config : BotConfig
-        Configuration for the bot, including edit delay settings.
-    model_config : ModelConfig | None
-        Configuration for the specific model being used.
-
-    Returns
-    -------
-    None
-    """
     response = ""
     last_edit_time = time.time()
 

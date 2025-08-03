@@ -28,28 +28,6 @@ class ModelConfig:
 
     @staticmethod
     def from_config_section(parser: configparser.ConfigParser, section: str) -> ModelConfig:
-        """
-        Create a ModelConfig instance from a config section.
-
-        Parameters
-        ----------
-        parser : configparser.ConfigParser
-            The configuration parser containing the section.
-        section : str
-            The name of the config section to read from.
-        model_name : str
-            Name of the configured model (for chat_model module)
-
-        Returns
-        -------
-        ModelConfig
-            A new ModelConfig instance based on the config section.
-
-        Raises
-        ------
-        ValueError
-            If thinking_prefix is specified without thinking_suffix or vice versa.
-        """
         thinking_prefix = parser.get(section, "thinking_prefix", fallback=None)
         thinking_suffix = parser.get(section, "thinking_suffix", fallback=None)
         tokenizer_name_or_path = parser.get(section, "tokenizer")
@@ -94,24 +72,6 @@ class ModelsConfig:
 
     @staticmethod
     def from_config(parser: configparser.ConfigParser) -> ModelsConfig:
-        """
-        Create a ModelsConfig instance from the configuration parser.
-
-        Parameters
-        ----------
-        parser : configparser.ConfigParser
-            The configuration parser to read from.
-
-        Returns
-        -------
-        ModelsConfig
-            A new ModelsConfig instance based on the config file.
-
-        Raises
-        ------
-        ValueError
-            If the default model is in the list of excluded models.
-        """
         default_model = parser.get("models", "default_model")
 
         models_config: dict[str, ModelConfig] = {}
@@ -138,19 +98,6 @@ class AdminConfig:
 
     @staticmethod
     def from_config(parser: configparser.ConfigParser) -> AdminConfig:
-        """
-        Create an AdminConfig instance from the configuration parser.
-
-        Parameters
-        ----------
-        parser : configparser.ConfigParser
-            The configuration parser to read from.
-
-        Returns
-        -------
-        AdminConfig
-            A new AdminConfig instance based on the config file.
-        """
         admin_id = parser.getint("admin", "id")
         return AdminConfig(id=admin_id)
 
@@ -180,19 +127,6 @@ class BotConfig:
 
     @staticmethod
     def from_config(parser: configparser.ConfigParser) -> BotConfig:
-        """
-        Create a BotConfig instance from the configuration parser.
-
-        Parameters
-        ----------
-        parser : configparser.ConfigParser
-            The configuration parser to read from.
-
-        Returns
-        -------
-        BotConfig
-            A new BotConfig instance based on the config file.
-        """
         bot_api_key = parser.get("bot", "discord_api_key")
         bot_prefix = parser.get("bot", "bot_prefix")
 
@@ -237,24 +171,6 @@ class Config:
 
     @staticmethod
     def from_file(config_path: Path) -> Config:
-        """
-        Load configuration from a file.
-
-        Parameters
-        ----------
-        config_path : Path
-            The path to the configuration file.
-
-        Returns
-        -------
-        Config
-            A new Config instance based on the config file.
-
-        Raises
-        ------
-        ValueError
-            If the config file cannot be read or is not found.
-        """
         config_parser = configparser.ConfigParser()
         files_read = config_parser.read(config_path)
 
@@ -273,14 +189,6 @@ class Config:
 
     @staticmethod
     def write_default_config(file_path: Path):
-        """
-        Write a default configuration file to the specified path.
-
-        Parameters
-        ----------
-        file_path : Path
-            The path where the default config file should be written.
-        """
         config = configparser.ConfigParser()
 
         config["models"] = {

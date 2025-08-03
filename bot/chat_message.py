@@ -40,15 +40,6 @@ class ChatMessage:
     def from_discord_message(
         message: discord.Message, role: MessageRole, session_name: str, owner_id: int
     ) -> ChatMessage:
-        """Create ChatMessage from discord.Message.
-
-        Args:
-            message: The discord message to convert
-            session_name: The name of the chat session
-
-        Returns:
-            ChatMessage: A new ChatMessage instance
-        """
         return ChatMessage(
             id=message.id,
             owner_id=owner_id,
