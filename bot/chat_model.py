@@ -26,6 +26,7 @@ class ChatModel:
     parameters_size: str
     quant: str
     context_length: int
+    config: ModelConfig
 
     @staticmethod
     def from_ollama_model(ollama_model: ollama.ListResponse.Model, model_config: ModelConfig) -> ChatModel:
@@ -58,6 +59,7 @@ class ChatModel:
                 parameters_size=parameters,
                 quant=quant,
                 context_length=ctx_length,
+                config=model_config,
             )
 
         return ChatModel(
@@ -67,6 +69,7 @@ class ChatModel:
             parameters_size=UnknownFieldValue,
             quant=UnknownFieldValue,
             context_length=ctx_length,
+            config=model_config,
         )
 
     def __str__(self) -> str:
@@ -84,7 +87,7 @@ def get_all_models(configs: ModelsConfig) -> list[ChatModel]:
 
 def get_model(name: str, configs: ModelsConfig) -> ChatModel | None:
     for model in ollama.list().models:
-        model_name = model.model if model.model is not None else ""
+        model_name = model.model if ((model.model is not None) and model.model.startswith(name)) else ""
         if (model_config := configs.get_model_config(model_name)) is not None:
             return ChatModel.from_ollama_model(model, model_config)
     return None
