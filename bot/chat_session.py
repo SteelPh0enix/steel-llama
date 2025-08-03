@@ -21,8 +21,9 @@ class ChatSession:
     def to_llm_messages_list(self, messages_limit: int | None = None) -> list[dict[str, str]]:
         return [{"role": str(msg.role), "content": str(msg)} for msg in self.messages(messages_limit)]
 
-    def to_llm_chat(self, chat_model: ChatModel, messages_limit: int | None = None) -> tuple[str, int] | None:
-        """Converts the session into a tokenized LLM prompt and returns it (and it's length in tokens), or None if current model does not have chat template provided."""
+    def to_llm_prompt(self, chat_model: ChatModel, messages_limit: int | None = None) -> tuple[str, int] | None:
+        """Converts the session into a tokenized LLM prompt and returns it (and it's length in tokens),
+        or None if current model does not have chat template provided."""
         if not chat_model.config.tokenizer_has_chat_template():
             return None
 
@@ -34,28 +35,31 @@ class ChatSession:
         tokenized_prompt = cast(list[int], chat_model.tokenizer.encode(prompt))  # type: ignore
         return prompt, len(tokenized_prompt)
 
-    def estimate_length(self, chat_model: ChatModel, messages_limit: int | None = None) -> int:
+    def estimate_token_length(self, chat_model: ChatModel, messages_limit: int | None = None) -> int:
         return sum([msg.token_length(chat_model.config) for msg in self.messages(messages_limit)])
 
     def to_ollama_input(
         self, chat_model: ChatModel, estimation_tolerance: float = 1.1
     ) -> str | list[dict[str, str]] | None:
+        """Returns either a ready prompt (as `str`) for `generate` endpoint, or list of
+        messages for `chat` endpoint of ollama, restricting the amount of messages to
+        account for model's context size. If it's not possible to create a prompt, returns None"""
         if chat_model.context_length is None or chat_model.context_length <= 0:
-            if (prompt := self.to_llm_chat(chat_model)) is not None:
+            if (prompt := self.to_llm_prompt(chat_model)) is not None:
                 return prompt[0]
             return self.to_llm_messages_list()
 
         messages_amount = len(self.messages())
-        if (prompt := self.to_llm_chat(chat_model)) is not None:
+        if (prompt := self.to_llm_prompt(chat_model)) is not None:
             while prompt[1] > chat_model.context_length and messages_amount > 0:
                 messages_amount -= 1
-                prompt = cast(tuple[str, int], self.to_llm_chat(chat_model, messages_amount))
+                prompt = cast(tuple[str, int], self.to_llm_prompt(chat_model, messages_amount))
             if messages_amount == 0:
                 return None
             return prompt[0]
         else:
             while (
-                self.estimate_length(chat_model, messages_amount) * estimation_tolerance
+                self.estimate_token_length(chat_model, messages_amount) * estimation_tolerance
             ) > chat_model.context_length and messages_amount > 0:
                 messages_amount -= 1
             return self.to_llm_messages_list(messages_amount)

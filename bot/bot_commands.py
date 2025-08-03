@@ -1,34 +1,23 @@
-import asyncio
-
-import ollama
-from discord import Member, Message, User
+from discord import Message
 from discord.ext import commands
 from httpx import ConnectError
 
-from bot import Bot, process_llm_response
+from bot import Bot
 from bot.chat_message import ChatMessage, MessageRole
-from bot.chat_model import UnknownContextLengthValue, get_all_models
+from bot.chat_model import UnknownContextLengthValue, get_all_models, get_model
 from bot.chat_session import ChatSession
-from bot.configuration import ModelConfig
 
 LlmBackendUnavailableMessage: str = "**The LLM backend is currently unavailable, try again later.**"
-
-
-def transform_mentions_into_usernames(message: str, mentions: list[User | Member]) -> str:
-    for mention in mentions:
-        message = message.replace(f"<@{mention.id}>", f"<@{mention.name} (UID: {mention.id})>")
-    return message
 
 
 class SteelLlamaCommands(commands.Cog):
     def __init__(self, bot: Bot):
         self.bot = bot
 
-    async def get_llm_session(self, ctx: commands.Context, response: Message) -> ChatSession | None:
+    async def get_llm_session(self, ctx: commands.Context, response: Message, admin_id: int) -> ChatSession | None:
         user_id = ctx.message.author.id
-        admin_id = self.bot.config.admin.id
-
         session = self.bot.get_active_user_session(user_id)
+
         if session is not None:
             session.add_message(
                 ChatMessage.from_discord_message(ctx.message, MessageRole.USER, session.name, session.owner_id)
@@ -37,9 +26,10 @@ class SteelLlamaCommands(commands.Cog):
             await response.edit(content="*Reading chat history...*")
             if self.bot.user is None:
                 await response.edit(
-                    content=f"*Bot is somehow not logged in, so i cannot determine which messages are mine.,. call the admin? <@{admin_id}>*"
+                    content=f"**Error: Bot is somehow not logged in, so i cannot determine which messages are mine... call the admin? <@{admin_id}>**"
                 )
                 return None
+
             session = await self.bot.create_temporary_session(
                 f"Temp-{ctx.message.channel.id}",
                 self.bot.user.id,
@@ -49,7 +39,7 @@ class SteelLlamaCommands(commands.Cog):
 
         if session.model not in self.bot.config.models.models:
             await response.edit(
-                content=f"**Oops, model '{session.model}' for session '{session.name}' is not available, <@{admin_id}> fix that shit**"
+                content=f"**Error: Oops, model '{session.model}' for session '{session.name}' is not configured, <@{admin_id}> fix that shit**"
             )
             return None
 
@@ -64,13 +54,26 @@ class SteelLlamaCommands(commands.Cog):
         prompt : str
             Message to send.
         """
+        admin_id = self.bot.config.admin.id
         response = await ctx.message.reply("*Starting up...*")
-        session = await self.get_llm_session(ctx, response)
+        session = await self.get_llm_session(ctx, response, admin_id)
         if session is None:
             return
 
-        model_config = self.bot.config.models.models[session.model]
+        chat_model = get_model(session.model, self.bot.config.models)
+        if chat_model is None:
+            await response.edit(
+                content=f"**Error: chat model '{session.model}' for session '{session.name}' is not available, <@{admin_id}> fix that shit.**"
+            )
+            return
+
         await response.edit(content="*Processing messages...*")
+        llm_input = session.to_ollama_input(chat_model)
+        if llm_input is None:
+            await response.edit(
+                content=f"**Error: could not process the messages into conversation, context for model '{chat_model.name}' ({chat_model.context_length} tokens) is too small for the prompt. Switch session or try again later.**"
+            )
+            return
 
         try:
             pass
