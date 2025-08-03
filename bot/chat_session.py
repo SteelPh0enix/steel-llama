@@ -8,6 +8,13 @@ from bot.chat_message import ChatMessage, MessageRole
 from bot.configuration import ModelConfig
 
 
+def count_words_and_special_chars(text: str) -> int:
+    word_count = len(text.split())
+    special_chars = set(",.'\"!@#$%^&*()_+-=[]{}|;:,.<>?/`~")
+    special_char_count = sum(1 for char in text if char in special_chars)
+    return word_count + special_char_count
+
+
 class ChatSession:
     def __init__(self, owner_id: int, name: str, model: str = "", system_prompt: str = "") -> None:
         self._owner_id = owner_id
@@ -28,6 +35,9 @@ class ChatSession:
         prompt = model_config.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)  # type: ignore
         tokenized_prompt = model_config.tokenizer.encode(prompt)  # type: ignore
         return prompt, len(tokenized_prompt)
+
+    def estimate_length(self, limit: int | None = None) -> int:
+        return sum([count_words_and_special_chars(str(msg)) for msg in self.messages(limit)])
 
     @property
     def owner_id(self) -> int:

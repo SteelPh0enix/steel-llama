@@ -1,7 +1,7 @@
 import asyncio
 
 import ollama
-from discord import Member, User, Message
+from discord import Member, Message, User
 from discord.ext import commands
 from httpx import ConnectError
 
@@ -9,6 +9,7 @@ from bot import Bot, process_llm_response
 from bot.chat_message import ChatMessage, MessageRole
 from bot.chat_model import UnknownContextLengthValue, get_all_models
 from bot.chat_session import ChatSession
+from bot.configuration import ModelConfig
 
 LlmBackendUnavailableMessage: str = "**The LLM backend is currently unavailable, try again later.**"
 
@@ -23,7 +24,7 @@ class SteelLlamaCommands(commands.Cog):
     def __init__(self, bot: Bot):
         self.bot = bot
 
-    async def get_session_for_response(self, ctx: commands.Context, response: Message) -> ChatSession | None:
+    async def get_llm_session(self, ctx: commands.Context, response: Message) -> ChatSession | None:
         user_id = ctx.message.author.id
         admin_id = self.bot.config.admin.id
 
@@ -54,6 +55,39 @@ class SteelLlamaCommands(commands.Cog):
 
         return session
 
+    async def process_prompt(
+        self,
+        prompt: str,
+        prompt_length: int,
+        model_name: str,
+        model_config: ModelConfig,
+        response: Message,
+    ):
+        generate_stream = await asyncio.to_thread(
+            ollama.generate,
+            model=model_name,
+            prompt=prompt,
+            raw=True,
+            stream=True,
+        )
+        await process_llm_response(generate_stream, response, self.bot.config.bot, model_config, is_chat_response=False)
+
+    async def process_messages_list(
+        self,
+        messages: list[dict[str, str]],
+        prompt_length: int,
+        model_name: str,
+        model_config: ModelConfig,
+        response: Message,
+    ):
+        chat_stream = await asyncio.to_thread(
+            ollama.chat,
+            model=model_name,
+            messages=messages,
+            stream=True,
+        )
+        await process_llm_response(chat_stream, response, self.bot.config.bot, model_config, is_chat_response=True)
+
     @commands.command(name="llm")
     async def respond(self, ctx: commands.Context):
         """Chat with the LLM
@@ -64,37 +98,21 @@ class SteelLlamaCommands(commands.Cog):
             Message to send.
         """
         response = await ctx.message.reply("*Starting up...*")
-        session = await self.get_session_for_response(ctx, response)
+        session = await self.get_llm_session(ctx, response)
         if session is None:
             return
 
         model_config = self.bot.config.models.models[session.model]
         await response.edit(content="*Processing messages...*")
+        prompt = session.to_llm_prompt(model_config)
 
         try:
-            prompt = session.to_llm_prompt(model_config)
-            if prompt is None:
-                # TODO: roughly count the amount of tokens and check if the session fits
-                chat_stream = await asyncio.to_thread(
-                    ollama.chat,
-                    model=session.model,
-                    messages=session.to_llm_messages_list(),
-                    stream=True,
-                )
-                await process_llm_response(
-                    chat_stream, response, self.bot.config.bot, model_config, is_chat_response=True
-                )
-            else:
+            if prompt is not None:
                 prompt_message, prompt_length = prompt
-                generate_stream = await asyncio.to_thread(
-                    ollama.generate,
-                    model=session.model,
-                    prompt=prompt_message,
-                    raw=True,
-                    stream=True,
-                )
-                await process_llm_response(
-                    generate_stream, response, self.bot.config.bot, model_config, is_chat_response=False
+                await self.process_prompt(prompt_message, prompt_length, session.model, model_config, response)
+            else:
+                await self.process_messages_list(
+                    session.to_llm_messages_list(), session.estimate_length(), session.model, model_config, response
                 )
         except ConnectError:
             await response.edit(content=LlmBackendUnavailableMessage)
