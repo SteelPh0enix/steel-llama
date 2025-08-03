@@ -7,6 +7,8 @@ import discord
 
 from enum import StrEnum
 
+from bot.configuration import ModelConfig
+
 
 class MessageRole(StrEnum):
     SYSTEM = "system"
@@ -57,6 +59,9 @@ class ChatMessage:
             role=role,
             content=transform_mentions_into_usernames(message.content, message.mentions),
         )
+
+    def token_length(self, model_config: ModelConfig) -> int:
+        return len(model_config.tokenizer.encode(str(self)))  # type: ignore
 
     def __str__(self) -> str:
         return f"@{self.sender_nickname}:\n{self.content}"

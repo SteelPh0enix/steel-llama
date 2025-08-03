@@ -23,6 +23,9 @@ class ModelConfig:
     context_limit: int | None
     """Maximum amount of tokens for a prompt (only input tokens)"""
 
+    def tokenizer_has_chat_template(self) -> bool:
+        return hasattr(self.tokenizer, "chat_template")
+
     @staticmethod
     def from_config_section(parser: configparser.ConfigParser, section: str) -> ModelConfig:
         """

@@ -3,16 +3,10 @@ from __future__ import annotations
 import sqlite3
 from datetime import datetime
 from pathlib import Path
+from typing import cast
 
 from bot.chat_message import ChatMessage, MessageRole
 from bot.configuration import ModelConfig
-
-
-def count_words_and_special_chars(text: str) -> int:
-    word_count = len(text.split())
-    special_chars = set(",.'\"!@#$%^&*()_+-=[]{}|;:,.<>?/`~")
-    special_char_count = sum(1 for char in text if char in special_chars)
-    return word_count + special_char_count
 
 
 class ChatSession:
@@ -24,20 +18,48 @@ class ChatSession:
         self._messages: list[ChatMessage] = []
         self._update_system_prompt()
 
-    def to_llm_messages_list(self, limit: int | None = None) -> list[dict[str, str]]:
-        return [{"role": str(msg.role), "content": str(msg)} for msg in self.messages(limit)]
+    def to_llm_messages_list(self, messages_limit: int | None = None) -> list[dict[str, str]]:
+        return [{"role": str(msg.role), "content": str(msg)} for msg in self.messages(messages_limit)]
 
-    def to_llm_prompt(self, model_config: ModelConfig, limit: int | None = None) -> tuple[str, int] | None:
+    def to_llm_chat(self, model_config: ModelConfig, messages_limit: int | None = None) -> tuple[str, int] | None:
         """Converts the session into a tokenized LLM prompt and returns it (and it's length in tokens), or None if current model does not have chat template provided."""
-        messages = self.to_llm_messages_list(limit)
-        if not hasattr(model_config.tokenizer, "chat_template"):
+        if not model_config.tokenizer_has_chat_template():
             return None
-        prompt = model_config.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)  # type: ignore
-        tokenized_prompt = model_config.tokenizer.encode(prompt)  # type: ignore
+
+        messages = self.to_llm_messages_list(messages_limit)
+        prompt = cast(
+            str,
+            model_config.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True),  # type: ignore
+        )
+        tokenized_prompt = cast(list[int], model_config.tokenizer.encode(prompt))  # type: ignore
         return prompt, len(tokenized_prompt)
 
-    def estimate_length(self, limit: int | None = None) -> int:
-        return sum([count_words_and_special_chars(str(msg)) for msg in self.messages(limit)])
+    def estimate_length(self, model_config: ModelConfig, messages_limit: int | None = None) -> int:
+        return sum([msg.token_length(model_config) for msg in self.messages(messages_limit)])
+
+    def to_ollama_input(
+        self, model_config: ModelConfig, ollama_context_limit: int | None = None, estimation_tolerance: float = 1.1
+    ) -> str | list[dict[str, str]] | None:
+        ctx_limit = model_config.context_limit if model_config.context_limit is not None else ollama_context_limit
+        if ctx_limit is None or ctx_limit <= 0:
+            if (prompt := self.to_llm_chat(model_config)) is not None:
+                return prompt[0]
+            return self.to_llm_messages_list()
+
+        messages_amount = len(self.messages())
+        if (prompt := self.to_llm_chat(model_config)) is not None:
+            while prompt[1] > ctx_limit and messages_amount > 0:
+                messages_amount -= 1
+                prompt = cast(tuple[str, int], self.to_llm_chat(model_config, messages_amount))
+            if messages_amount == 0:
+                return None
+            return prompt[0]
+        else:
+            while (
+                self.estimate_length(model_config, messages_amount) * estimation_tolerance
+            ) > ctx_limit and messages_amount > 0:
+                messages_amount -= 1
+            return self.to_llm_messages_list(messages_amount)
 
     @property
     def owner_id(self) -> int:
@@ -81,7 +103,20 @@ class ChatSession:
         self._save_session_messages()
 
     def messages(self, limit: int | None = None) -> list[ChatMessage]:
-        return self._messages[:limit] if limit is not None else self._messages
+        if limit is None:
+            return self._messages
+
+        if limit <= 0:
+            return []
+
+        # preserve system prompt if possible
+        if self._messages[0].role == MessageRole.SYSTEM:
+            if limit >= 2:
+                return [self._messages[0]] + self._messages[: (limit - 1)]
+            else:
+                return [self._messages[-1]]
+        else:
+            return self._messages[:limit]
 
     def save(self) -> None:
         self._save_session_info()

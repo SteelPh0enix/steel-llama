@@ -55,39 +55,6 @@ class SteelLlamaCommands(commands.Cog):
 
         return session
 
-    async def process_prompt(
-        self,
-        prompt: str,
-        prompt_length: int,
-        model_name: str,
-        model_config: ModelConfig,
-        response: Message,
-    ):
-        generate_stream = await asyncio.to_thread(
-            ollama.generate,
-            model=model_name,
-            prompt=prompt,
-            raw=True,
-            stream=True,
-        )
-        await process_llm_response(generate_stream, response, self.bot.config.bot, model_config, is_chat_response=False)
-
-    async def process_messages_list(
-        self,
-        messages: list[dict[str, str]],
-        prompt_length: int,
-        model_name: str,
-        model_config: ModelConfig,
-        response: Message,
-    ):
-        chat_stream = await asyncio.to_thread(
-            ollama.chat,
-            model=model_name,
-            messages=messages,
-            stream=True,
-        )
-        await process_llm_response(chat_stream, response, self.bot.config.bot, model_config, is_chat_response=True)
-
     @commands.command(name="llm")
     async def respond(self, ctx: commands.Context):
         """Chat with the LLM
@@ -104,16 +71,9 @@ class SteelLlamaCommands(commands.Cog):
 
         model_config = self.bot.config.models.models[session.model]
         await response.edit(content="*Processing messages...*")
-        prompt = session.to_llm_prompt(model_config)
 
         try:
-            if prompt is not None:
-                prompt_message, prompt_length = prompt
-                await self.process_prompt(prompt_message, prompt_length, session.model, model_config, response)
-            else:
-                await self.process_messages_list(
-                    session.to_llm_messages_list(), session.estimate_length(), session.model, model_config, response
-                )
+            pass
         except ConnectError:
             await response.edit(content=LlmBackendUnavailableMessage)
         except Exception as e:
