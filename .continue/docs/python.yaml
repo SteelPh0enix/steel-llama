@@ -1,6 +1,0 @@
-name: Python documentation
-version: 0.0.1
-schema: v1
-docs:
-  - name: Python documentation
-    startUrl: https://docs.python.org/3/

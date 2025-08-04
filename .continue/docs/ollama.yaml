@@ -1,6 +1,0 @@
-name: Python ollama package
-version: 0.0.1
-schema: v1
-docs:
-  - name: Python ollama package
-    startUrl: https://github.com/ollama/ollama-python

@@ -1,6 +1,0 @@
-name: Python Discord package
-version: 0.0.1
-schema: v1
-docs:
-  - name: Python discord package
-    startUrl: https://discordpy.readthedocs.io/en/stable/
