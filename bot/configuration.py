@@ -63,13 +63,6 @@ class ModelsConfig:
     models: dict[str, ModelConfig]
     """Dictionary mapping model patterns to their specific configurations."""
 
-    def get_model_config(self, full_model_name: str) -> ModelConfig | None:
-        """Returns configuration for a model based on it's full name"""
-        for model_name, model in self.models.items():
-            if full_model_name.startswith(model_name):
-                return model
-        return None
-
     @staticmethod
     def from_config(parser: configparser.ConfigParser) -> ModelsConfig:
         default_model = parser.get("models", "default_model")
@@ -128,22 +121,23 @@ class BotConfig:
     @staticmethod
     def from_config(parser: configparser.ConfigParser) -> BotConfig:
         bot_api_key = parser.get("bot", "discord_api_key")
-        bot_prefix = parser.get("bot", "bot_prefix")
 
+        bot_prefix = parser.get("bot", "bot_prefix")
         if bot_prefix == "":
             raise ValueError("Invalid bot prefix, must not be empty!")
 
         bot_delay = parser.getfloat("bot", "edit_delay_seconds")
-
         if bot_delay <= 0:
             raise ValueError("Invalid bot edit delay, must be longer than 0 seconds")
 
         max_messages_for_context = parser.getint("bot", "max_messages_for_context")
-
         if max_messages_for_context < 0:
             raise ValueError("Invalid context message limit, must be 0 or more")
 
         session_db_path = parser.get("bot", "session_db_path")
+        if not session_db_path:
+            raise ValueError("Session database path cannot be empty")
+
         default_system_prompt = parser.get("bot", "default_system_prompt")
 
         return BotConfig(
