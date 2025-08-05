@@ -4,38 +4,69 @@ from __future__ import annotations
 class LLMResponse:
     """Class representing a processed LLM response"""
 
-    def __init__(self, raw_response: str, thinking_tags: tuple[str, str] | None = None):
-        self.thinking_start_tag: str | None = None
-        self.thinking_end_tag: str | None = None
-        self.thoughts: str | None = None
-        self.content: str | None = None
+    def __init__(self, thinking_start_tag: str | None = None, thinking_end_tag: str | None = None):
+        self._thinking_start_tag = thinking_start_tag
+        self._thinking_end_tag = thinking_end_tag
+        self._thoughts: str = ""
+        self._content: str = ""
 
-        if thinking_tags is not None:
-            self.thinking_start_tag, self.thinking_end_tag = thinking_tags
+        self._thinking_started = False
+        self._thinking_finished = False
 
-        self._process(raw_response)
+    @property
+    def thoughts(self) -> str | None:
+        return self._thoughts
 
-    def _process(self, raw_response: str):
-        self._extract_thoughts(raw_response.strip())
+    @property
+    def content(self) -> str | None:
+        return self._content
 
-    def _extract_thoughts(self, raw_response: str):
-        if (self.thinking_start_tag is not None) and (self.thinking_end_tag is not None):
-            thinking_start_tag_position = raw_response.find(self.thinking_start_tag)
-            thinking_end_tag_position = raw_response.find(self.thinking_end_tag)
+    @property
+    def thinking_in_progress(self) -> bool:
+        return self._thinking_started and not self._thinking_finished
 
-            if thinking_start_tag_position != -1:
-                thoughts_start = thinking_start_tag_position + len(self.thinking_start_tag)
-                if thinking_end_tag_position != -1:
-                    # both prefix and suffix are found
-                    thoughts_end = thinking_end_tag_position + len(self.thinking_end_tag)
-                    self.thoughts = raw_response[thoughts_start:thinking_end_tag_position].strip()
-                    self.content = raw_response[thoughts_end:].lstrip()
-                else:
-                    # only prefix is found, thinking in progress
-                    self.thoughts = raw_response[thoughts_start:].lstrip()
+    def append(self, chunk: str):
+        thinking_processed = self._process_thinking(chunk)
+        if not self.thinking_in_progress and not thinking_processed:
+            self._content += chunk
+
+    def _process_thinking(self, chunk: str) -> bool:
+        if self._thinking_finished or (self._thinking_start_tag is None) or (self._thinking_end_tag is None):
+            return False
+
+        thinking_start_tag_position = chunk.find(self._thinking_start_tag)
+        thinking_end_tag_position = chunk.find(self._thinking_end_tag)
+
+        thinking_start = (
+            thinking_start_tag_position + len(self._thinking_start_tag) if thinking_start_tag_position != -1 else None
+        )
+        thinking_end = thinking_end_tag_position if thinking_end_tag_position != -1 else None
+        content_start = thinking_end + len(self._thinking_end_tag) if thinking_end is not None else None
+        if content_start is not None and content_start >= len(chunk):
+            content_start = None
+
+        chunk_processed = False
+
+        if thinking_start is not None:
+            if thinking_end is not None:
+                self._thoughts += chunk[thinking_start:thinking_end].strip()
             else:
-                # no tags found, no thinking content
-                self.content = raw_response
-        else:
-            # model is not gonna output any thoughts, nothing to do
-            self.content = raw_response
+                self._thoughts += chunk[thinking_start:].lstrip()
+            self._thinking_started = True
+            chunk_processed = True
+
+        if thinking_end is not None:
+            if not chunk_processed:
+                self._thoughts += chunk[:thinking_end].rstrip()
+                chunk_processed = True
+            self._thinking_finished = True
+
+        if self.thinking_in_progress and not chunk_processed:
+            self._thoughts += chunk
+            return True
+
+        if content_start is not None:
+            self._content += chunk[content_start:].lstrip()
+            return True
+
+        return chunk_processed
