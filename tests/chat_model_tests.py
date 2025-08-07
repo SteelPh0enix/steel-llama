@@ -1,6 +1,4 @@
-from __future__ import annotations
-
-from bot.chat_model import ChatModel, split_model_name
+from bot.chat_model import ChatModel, get_all_models, get_model, split_model_name
 from bot.configuration import ModelConfig
 from unittest.mock import MagicMock, patch
 
@@ -18,7 +16,7 @@ def test_split_model_name():
 
 
 def get_mocked_model_config(
-    context_limit: int,
+    context_limit: int | None = None,
     thinking_prefix: str = "<think>",
     thinking_suffix: str = "</think>",
     chat_template: str = "Dummy template",
@@ -52,7 +50,7 @@ def get_mocked_ollama_model_info(context_length: int | None) -> MagicMock:
     return mock_show_response
 
 
-def test_creating_valid_chat_model_from_ollama_model():
+def test_from_ollama_model():
     """Test creating valid model from mocked ollama responses"""
     mocked_mistral_config = get_mocked_model_config(context_limit=4096)
     mocked_mistral = get_mocked_ollama_model("mistral:latest", "5.2 GB", "7B", "Q4")
@@ -122,3 +120,93 @@ def test_from_ollama_model_with_none_context_length():
         assert chat_model.quant == "Q4"
         assert chat_model.context_length == 4096  # Should use config value
         assert chat_model.config == mocked_config
+
+
+def test_from_ollama_model_with_no_context_override():
+    """Test creating ChatModel when context length is None in model info"""
+    mocked_config = get_mocked_model_config(context_limit=None)
+    mocked_model = get_mocked_ollama_model("test_model:latest", "1GB", "1B", "Q4")
+    mocked_model.details = MagicMock()
+    mocked_model.details.parameter_size = "1B"
+    mocked_model.details.quantization_level = "Q4"
+
+    with patch("bot.chat_model.ollama") as mock_ollama:
+        mock_ollama.show.return_value = get_mocked_ollama_model_info(context_length=8192)
+
+        chat_model = ChatModel.from_ollama_model(mocked_model, mocked_config)
+
+        assert chat_model.name == "test_model"
+        assert chat_model.tag == "latest"
+        assert chat_model.size == "1GB"
+        assert chat_model.parameters_size == "1B"
+        assert chat_model.quant == "Q4"
+        assert chat_model.context_length == 8192  # Should use model value
+        assert chat_model.config == mocked_config
+
+
+def test_get_all_models():
+    """Test get_all_models function"""
+    mocked_mistral_config = get_mocked_model_config(context_limit=4096)
+    mocked_llama_config = get_mocked_model_config(context_limit=20480)
+    mocked_mistral = get_mocked_ollama_model("mistral:latest", "5.2 GB", "7B", "Q4")
+    mocked_llama = get_mocked_ollama_model("llama3", "4GB", "8B", "Q3")
+
+    # Mock the ollama.list() response
+    with patch("bot.chat_model.ollama") as mock_ollama:
+        mock_ollama.list.return_value.models = [mocked_mistral, mocked_llama]
+
+        # Mock configs
+        mock_configs = MagicMock()
+        mock_configs.models = {"mistral:latest": mocked_mistral_config, "llama3": mocked_llama_config}
+
+        models = get_all_models(mock_configs)
+
+        assert len(models) == 2
+        assert models[0].name == "mistral"
+        assert models[0].tag == "latest"
+        assert models[0].context_length == 4096
+        assert models[1].name == "llama3"
+        assert models[1].context_length == 20480
+
+
+def test_get_model():
+    """Test get_model function"""
+    mocked_mistral_config = get_mocked_model_config(context_limit=4096)
+    mocked_llama_config = get_mocked_model_config(context_limit=20480)
+    mocked_mistral = get_mocked_ollama_model("mistral:latest", "5.2 GB", "7B", "Q4")
+    mocked_llama = get_mocked_ollama_model("llama3", "4GB", "8B", "Q3")
+
+    # Mock the ollama.list() response
+    with patch("bot.chat_model.ollama") as mock_ollama:
+        mock_ollama.list.return_value.models = [mocked_mistral, mocked_llama]
+
+        # Mock configs
+        mock_configs = MagicMock()
+        mock_configs.models = {"mistral:latest": mocked_mistral_config, "llama3": mocked_llama_config}
+
+        # Test finding a model by name
+        model = get_model("mistral", mock_configs)
+        assert model is not None
+        assert model.name == "mistral"
+        assert model.context_length == 4096
+
+        # Test finding a model by exact name
+        model2 = get_model("llama3", mock_configs)
+        assert model2 is not None
+        assert model2.name == "llama3"
+        assert model2.context_length == 20480
+
+
+def test_get_model_no_match():
+    """Test get_model when no matching model is found"""
+    mocked_mistral = get_mocked_ollama_model("mistral:latest", "5.2 GB", "7B", "Q4")
+
+    with patch("bot.chat_model.ollama") as mock_ollama:
+        mock_ollama.list.return_value.models = [mocked_mistral]
+
+        # Mock configs with no matching model
+        mock_configs = MagicMock()
+        mock_configs.models = {}
+
+        model = get_model("mistral", mock_configs)
+        assert model is None
