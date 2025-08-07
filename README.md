@@ -181,6 +181,8 @@ Model for global session is stored in bot's [configuration file](#configuration-
 [models]
 # The model to use by default
 default_model = qwen3-8b
+# the default model tag to use, if user doesn't specify one
+default_model_tag = latest
 
 [admin]
 # Discord ID of administrator's account.
@@ -200,8 +202,8 @@ session_db_path = ./bot.db
 # Default system prompt for all sessions
 default_system_prompt = You are SteelLlama, an LLM-powered Discord bot, proceed with the following conversation with the users. Every message is prefixed with a line containing the username of sender (prefixed with @). DO NOT add that prefix to your messages, use it only to identify the authors. Messages directed specifically to you are prefixed with "$llm".
 
-# Every supported model must have a section in configuration
-[models.qwen3-8b]
+# Every supported model must have a section in configuration (with full model name, including tag)
+[models.qwen3-8b:latest]
 # Optional prefix and suffix for thinking indicator (used for models like qwen3)
 thinking_prefix = "<think>"
 thinking_suffix = "</think>"

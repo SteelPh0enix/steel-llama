@@ -59,6 +59,27 @@ def test_models_config_from_config():
     config = ModelsConfig.from_config(parser)
 
     assert config.default_model == "test-model"
+    assert config.default_model_tag is None
+    assert "test-model" in config.models
+
+
+def test_models_config_from_config_with_default_model_tag():
+    """Test ModelsConfig creation from parser"""
+    parser = configparser.ConfigParser()
+    parser["models"] = {
+        "default_model": "test-model",
+        "default_model_tag": "latest",
+    }
+    parser["models.test-model"] = {
+        "thinking_prefix": "<thinking>",
+        "thinking_suffix": "</thinking>",
+        "tokenizer": TEST_TOKENIZER,
+    }
+
+    config = ModelsConfig.from_config(parser)
+
+    assert config.default_model == "test-model"
+    assert config.default_model_tag == "latest"
     assert "test-model" in config.models
 
 
@@ -190,6 +211,7 @@ def test_config_from_file():
         config_content = f"""
 [models]
 default_model = test-model
+default_model_tag = default
 
 [admin]
 id = 12345
@@ -214,6 +236,7 @@ tokenizer = {TEST_TOKENIZER}
         config = Config.from_file(Path(config_file))
 
         assert config.models.default_model == "test-model"
+        assert config.models.default_model_tag == "default"
         assert config.admin.id == 12345
         assert config.bot.discord_api_key == "test_api_key"
         assert config.bot.bot_prefix == "$"
@@ -250,6 +273,7 @@ def test_config_write_default_config():
 
         # Check values
         assert parser["models"]["default_model"] == "qwen3-8b"
+        assert parser["models"]["default_model_tag"] == "latest"
         assert parser["admin"]["id"] == "12345"
         assert parser["bot"]["discord_api_key"] == "your_discord_api_key_here"
         assert parser["bot"]["bot_prefix"] == "$"

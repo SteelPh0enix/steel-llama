@@ -60,12 +60,18 @@ class ModelsConfig:
     default_model: str
     """The model name to use as a default when none is specified."""
 
+    default_model_tag: str | None
+    """Default tag for the model. If specified, users may provide only the name of
+    the model (for example, qwen3-8b), if not - users must provide full model name
+    (for example, qwen3-8b:latest)"""
+
     models: dict[str, ModelConfig]
     """Dictionary mapping model patterns to their specific configurations."""
 
     @staticmethod
     def from_config(parser: configparser.ConfigParser) -> ModelsConfig:
         default_model = parser.get("models", "default_model")
+        default_model_tag = parser.get("models", "default_model_tag", fallback=None)
 
         models_config: dict[str, ModelConfig] = {}
         for section in parser.sections():
@@ -79,6 +85,7 @@ class ModelsConfig:
         return ModelsConfig(
             default_model=default_model,
             models=models_config,
+            default_model_tag=default_model_tag,
         )
 
 
@@ -187,6 +194,7 @@ class Config:
 
         config["models"] = {
             "default_model": "qwen3-8b",
+            "default_model_tag": "latest",
         }
 
         config["admin"] = {"id": "12345"}
